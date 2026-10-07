@@ -1,7 +1,7 @@
 # Compagnon IA — avatar 3D vocal
 
-Une application inspirée de [AIRI](https://github.com/moeru-ai/airi) : tu parles à voix haute à une IA et son
-avatar 3D te répond. Il **articule** pendant qu'il parle, **cligne des yeux**, **te regarde**, **respire**,
+Tu parles à voix haute à une IA et son avatar 3D te répond. 
+Il **articule** pendant qu'il parle, **cligne des yeux**, **te regarde**, **respire**,
 fait des **gestes** et change d'**expression** selon l'émotion de chaque phrase (joie, tristesse, surprise…).
 
 Elle fonctionne dans un navigateur : **téléphone** (installable comme une application), **PC**,
