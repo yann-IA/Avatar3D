@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#1b1d2e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon.svg" />
+    <title>Compagnon IA</title>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+
+    <div id="loader" class="loader" hidden>
+      <div class="spinner"></div>
+      <div id="loader-text">Chargement de l'avatar…</div>
+    </div>
+
+    <header class="topbar">
+      <div id="persona-name" class="persona-name">Aiko</div>
+      <div id="status" class="status" data-state="idle">En attente</div>
+      <button id="settings-btn" class="icon-btn" aria-label="Réglages" title="Réglages">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.7 7.7 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.7 7.7 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
+      </button>
+    </header>
+
+    <section id="subtitles" class="subtitles" aria-live="polite">
+      <p id="user-line" class="line user"></p>
+      <p id="ai-line" class="line ai"></p>
+    </section>
+
+    <div id="toast" class="toast" role="alert" hidden></div>
+
+    <footer class="controls">
+      <form id="text-form" class="text-form" autocomplete="off">
+        <input id="text-input" type="text" placeholder="Écrire un message…" enterkeyhint="send" />
+        <button type="submit" class="icon-btn" aria-label="Envoyer">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg>
+        </button>
+      </form>
+      <button id="mic-btn" class="mic-btn" aria-label="Parler" title="Parler (barre d'espace)">
+        <span class="mic-ring"></span>
+        <svg class="ico-mic" viewBox="0 0 24 24" width="30" height="30" aria-hidden="true"><path fill="currentColor" d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15zm6-3.5a6 6 0 0 1-12 0H4.3a7.7 7.7 0 0 0 6.8 7.6V22h1.8v-2.9a7.7 7.7 0 0 0 6.8-7.6z"/></svg>
+        <svg class="ico-stop" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
+      </button>
+    </footer>
+
+    <aside id="panel" class="panel" hidden>
+      <div class="panel-head">
+        <h2>Réglages</h2>
+        <button id="panel-close" class="icon-btn" aria-label="Fermer">✕</button>
+      </div>
+      <nav id="tabs" class="tabs"></nav>
+      <div id="panel-body" class="panel-body"></div>
+    </aside>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

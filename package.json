@@ -1,0 +1,28 @@
+{
+  "name": "companion",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Compagnon IA vocal avec avatar 3D VRM (inspiré de moeru-ai/airi)",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "fetch-avatar": "node scripts/fetch-avatar.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@pixiv/three-vrm": "^3.5.5",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.3",
+    "vitest": "^5.0.3"
+  }
+}

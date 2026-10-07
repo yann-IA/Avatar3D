@@ -1,0 +1,14 @@
+{
+  "name": "Compagnon IA",
+  "short_name": "Compagnon",
+  "description": "Discute à voix haute avec une IA incarnée par un avatar 3D.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1b1d2e",
+  "theme_color": "#1b1d2e",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
