@@ -19,6 +19,17 @@ Elle fonctionne dans un navigateur : **téléphone** (installable comme une appl
 | Écoute | Reconnaissance du navigateur (gratuite) ou **Whisper** (OpenAI, Groq, serveur local) avec détection automatique de fin de phrase |
 | Conversation | Réponses en flux (l'avatar commence à parler dès la première phrase), interruption à tout moment, mode mains libres, mémoire réglable |
 
+## Utiliser l'application en ligne (rien à installer)
+
+👉 **https://yann-ia.github.io/Avatar3D/**
+
+Ouvre ce lien dans **Chrome** ou **Edge**, sur PC ou sur téléphone. Sur téléphone, « Ajouter à l'écran
+d'accueil » l'installe comme une application. Tes réglages et tes clés API restent enregistrés dans ton navigateur :
+ils ne passent jamais par GitHub.
+
+Le site est mis à jour automatiquement à chaque modification de la branche `main`
+(`.github/workflows/deploy.yml`).
+
 ## Installation facile sous Windows (sans taper de commande)
 
 1. **Installe Node.js** : sur [nodejs.org](https://nodejs.org), télécharge la version **LTS**, ouvre le fichier

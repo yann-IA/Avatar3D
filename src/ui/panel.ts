@@ -1,4 +1,4 @@
-import { PROVIDERS, getPath, saveSettings, setPath, type ProviderId, type Settings } from '../settings'
+import { HOSTED, PROVIDERS, getPath, saveSettings, setPath, type ProviderId, type Settings } from '../settings'
 import { browserVoices } from '../tts/engines'
 import { browserSTTAvailable } from '../stt/engines'
 
@@ -163,10 +163,14 @@ export class SettingsPanel {
             : range('Créativité (température)', 'temperature', 0, 1.5, 0.05),
           range('Longueur max. des réponses (tokens)', 'maxTokens', 128, 4096, 64),
           range('Mémoire de la conversation (messages)', 'historyLength', 2, 60, 2),
-          check('Passer par le relais local (contourne CORS)', 'useProxy'),
-          hint(
-            'Les clés sont enregistrées uniquement dans ce navigateur. Le relais local n’existe qu’avec <code>npm run dev</code> ou <code>npm run preview</code> : active-le si un fournisseur refuse les appels directs depuis le navigateur. Pour Ollama sans relais, lance-le avec <code>OLLAMA_ORIGINS=*</code>.',
-          ),
+          HOSTED
+            ? hint(
+                'Les clés sont enregistrées uniquement dans ce navigateur et sont envoyées directement au fournisseur choisi. Si un fournisseur refuse les appels depuis un navigateur (erreur « Failed to fetch »), choisis-en un autre (OpenAI, Claude et Groq fonctionnent) ou installe l\u2019application sur ton PC pour utiliser le relais local.',
+              )
+            : check('Passer par le relais local (contourne CORS)', 'useProxy') +
+              hint(
+                'Les clés sont enregistrées uniquement dans ce navigateur. Le relais local n’existe qu’avec <code>npm run dev</code> ou <code>npm run preview</code> : active-le si un fournisseur refuse les appels directs depuis le navigateur. Pour Ollama sans relais, lance-le avec <code>OLLAMA_ORIGINS=*</code>.',
+              ),
           `<button class="btn danger" data-action="clear">Effacer la conversation</button>`,
         ].join('')
       }

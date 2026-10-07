@@ -330,9 +330,15 @@ export function setPath(obj: unknown, path: string, value: unknown): void {
   target[last] = value
 }
 
+/**
+ * Version publiée sur un hébergement statique (GitHub Pages) : le relais local du serveur Vite
+ * n'y existe pas. Défini au moment du build par la variable d'environnement VITE_HOSTED.
+ */
+export const HOSTED = Boolean(import.meta.env.VITE_HOSTED)
+
 /** Préfixe une URL par le relais local si demandé (http(s)://hote/... -> /__proxy/https/hote/...). */
 export function viaProxy(url: string, useProxy: boolean): string {
-  if (!useProxy) return url
+  if (!useProxy || HOSTED) return url
   const m = /^(https?):\/\/(.*)$/.exec(url)
   if (!m) return url
   return new URL(`__proxy/${m[1]}/${m[2]}`, document.baseURI).href
