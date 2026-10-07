@@ -116,6 +116,8 @@ export interface ProviderConfig {
   baseUrl: string
   apiKey: string
   model: string
+  /** Anthropic : workspace à utiliser quand la clé n'est pas rattachée à un seul workspace. */
+  workspaceId?: string
 }
 
 export type TTSEngineId = 'browser' | 'openai' | 'elevenlabs' | 'none'
@@ -238,7 +240,7 @@ Tu discutes à l'oral avec ton interlocuteur : réponds en phrases courtes et na
 function defaultProviders(): Record<ProviderId, ProviderConfig> {
   const out = {} as Record<ProviderId, ProviderConfig>
   for (const [id, p] of Object.entries(PROVIDERS) as [ProviderId, ProviderPreset][]) {
-    out[id] = { baseUrl: p.baseUrl, apiKey: '', model: p.model }
+    out[id] = { baseUrl: p.baseUrl, apiKey: '', model: p.model, ...(p.kind === 'anthropic' ? { workspaceId: '' } : {}) }
   }
   return out
 }

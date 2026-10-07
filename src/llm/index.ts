@@ -16,6 +16,7 @@ export function createLLM(s: Settings): LLMClient {
       model: cfg.model,
       maxTokens: s.maxTokens,
       effort: s.claudeEffort,
+      workspaceId: cfg.workspaceId,
     })
   }
   return new OpenAICompatibleClient({

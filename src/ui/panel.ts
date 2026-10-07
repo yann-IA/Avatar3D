@@ -155,6 +155,12 @@ export class SettingsPanel {
             <datalist id="model-list">${preset.models.map((m) => `<option value="${esc(m)}">`).join('')}</datalist>`,
           text('Adresse de l’API', `${p}.baseUrl`, { type: 'url' }),
           preset.kind === 'anthropic'
+            ? text('ID du workspace (facultatif)', `${p}.workspaceId`, { placeholder: 'wrkspc_…' }) +
+              hint(
+                'À remplir seulement si Anthropic répond que la clé « n’est pas rattachée à un workspace ». L’identifiant (wrkspc_…) se trouve dans la console Anthropic, rubrique Settings → Workspaces. Autre solution : crée ta clé API à l’intérieur d’un workspace.',
+              )
+            : '',
+          preset.kind === 'anthropic'
             ? select('Rapidité des réponses (effort)', 'claudeEffort', [
                 ['low', 'Rapide (conseillé pour la voix)'],
                 ['medium', 'Équilibré'],

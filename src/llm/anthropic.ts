@@ -7,6 +7,8 @@ export interface AnthropicOptions {
   model: string
   maxTokens: number
   effort: 'low' | 'medium' | 'high'
+  /** ID de workspace (wrkspc_…), requis pour une clé rattachée à l'organisation plutôt qu'à un workspace. */
+  workspaceId?: string
 }
 
 /** Modèles qui acceptent le paramètre `effort` (pas Haiku 4.5 ni les générations antérieures). */
@@ -21,6 +23,7 @@ export class AnthropicClient implements LLMClient {
     this.client = new Anthropic({
       apiKey: opts.apiKey,
       baseURL: opts.baseUrl.replace(/\/+$/, ''),
+      defaultHeaders: opts.workspaceId?.trim() ? { 'anthropic-workspace-id': opts.workspaceId.trim() } : undefined,
       // L'application tourne entièrement dans le navigateur : la clé reste sur l'appareil de l'utilisateur.
       dangerouslyAllowBrowser: true,
     })
@@ -51,6 +54,13 @@ export class AnthropicClient implements LLMClient {
     } catch (err) {
       if (err instanceof Anthropic.APIUserAbortError) throw err
       if (err instanceof Anthropic.AuthenticationError) throw new LLMError('Clé API Anthropic invalide.')
+      if (err instanceof Anthropic.BadRequestError && /workspace/i.test(err.message)) {
+        throw new LLMError(
+          this.opts.workspaceId?.trim()
+            ? `L\u2019ID de workspace « ${this.opts.workspaceId.trim()} » est refusé : vérifie-le dans la console Anthropic (Settings → Workspaces).`
+            : 'Cette clé Anthropic n\u2019est rattachée à aucun workspace. Renseigne l\u2019« ID du workspace » (wrkspc_…) dans ⚙ → IA, ou crée une clé à l\u2019intérieur d\u2019un workspace.',
+        )
+      }
       if (err instanceof Anthropic.NotFoundError) throw new LLMError(`Modèle introuvable : ${model}`)
       if (err instanceof Anthropic.RateLimitError) throw new LLMError('Limite de débit Anthropic atteinte, réessaie dans un instant.')
       if (err instanceof Anthropic.APIError) throw new LLMError(`Erreur Anthropic ${err.status ?? ''} : ${err.message}`)
