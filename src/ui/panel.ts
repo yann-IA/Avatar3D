@@ -11,16 +11,20 @@ export interface PanelActions {
   importAvatar(file: File): void
   addAvatarUrl(name: string, url: string): void
   removeAvatar(id: string): void
+  playGesture(id: string): void
+  importAnimation(file: File): void
+  removeAnimation(id: string): void
   clearHistory(): void
 }
 
-type Tab = 'ia' | 'perso' | 'voix' | 'ecoute' | 'avatar' | 'affichage'
+type Tab = 'ia' | 'perso' | 'voix' | 'ecoute' | 'avatar' | 'gestes' | 'affichage'
 const TABS: [Tab, string][] = [
   ['ia', 'IA'],
   ['perso', 'Personnage'],
   ['voix', 'Voix'],
   ['ecoute', 'Écoute'],
   ['avatar', 'Avatar'],
+  ['gestes', 'Gestes'],
   ['affichage', 'Affichage'],
 ]
 
@@ -287,6 +291,28 @@ export class SettingsPanel {
           ),
         ].join('')
 
+      case 'gestes':
+        return [
+          `<div class="avatar-list">${s.gestures.list
+            .map(
+              (a) => `<div class="avatar-item">
+                <span class="name">${esc(a.name)} <span class="hint">[${esc(a.tag)}]</span></span>
+                <button class="btn" data-action="play-gesture" data-id="${esc(a.id)}" aria-label="Jouer">▶</button>
+                ${a.builtin ? '' : `<button class="btn danger" data-action="rm-gesture" data-id="${esc(a.id)}" aria-label="Supprimer">✕</button>`}
+              </div>`,
+            )
+            .join('')}</div>`,
+          `<label class="btn primary" style="text-align:center">Importer une animation .vrma
+            <input id="vrma-file" type="file" accept=".vrma" hidden></label>`,
+          check('L\u2019IA peut faire des gestes d\u2019elle-même', 'gestures.enabled'),
+          hint(
+            'L\u2019IA déclenche un geste en écrivant sa balise (par exemple <code>[wave]</code> pour dire bonjour). Une animation importée reçoit une balise tirée de son nom. Tu peux aussi les jouer avec le bouton ✋ en haut de l\u2019écran.',
+          ),
+          hint(
+            'Animations VRMA à télécharger : les packs gratuits de VRoid et d\u2019autres créateurs sur <a href="https://booth.pm/en/search/VRMA" target="_blank" rel="noopener">Booth (recherche « VRMA »)</a> — vérifie leur licence, ou crée les tiennes avec un logiciel comme Blender (extension VRM) ou des outils de capture de mouvement.',
+          ),
+        ].join('')
+
       case 'affichage':
         return [
           check('Sous-titres', 'ui.subtitles'),
@@ -339,6 +365,12 @@ export class SettingsPanel {
       if (!url) return
       const name = decodeURIComponent(url.split('/').pop() ?? 'Avatar').replace(/\.vrm$/i, '')
       this.actions.addAvatarUrl(name, url)
+    })
+    on('play-gesture', (el) => this.actions.playGesture(el.dataset.id!))
+    on('rm-gesture', (el) => this.actions.removeAnimation(el.dataset.id!))
+    this.body.querySelector<HTMLInputElement>('#vrma-file')?.addEventListener('change', (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (file) this.actions.importAnimation(file)
     })
     this.body.querySelector<HTMLInputElement>('#vrm-file')?.addEventListener('change', (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]

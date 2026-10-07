@@ -131,6 +131,45 @@ export interface AvatarEntry {
   builtin?: boolean
 }
 
+export interface AnimationEntry {
+  id: string
+  name: string
+  /** Balise que l'IA peut écrire pour déclencher le geste, ex. « wave » pour [wave]. */
+  tag: string
+  /** Quand l'utiliser : expliqué à l'IA dans le prompt système. */
+  hint: string
+  /** URL d'un fichier .vrma, ou « idb:<id> » pour un fichier importé. */
+  url: string
+  /** Nombre de répétitions (0 = jusqu'à interruption). */
+  repeat: number
+  /** La caméra recule pour montrer tout le corps pendant l'animation. */
+  fullBody: boolean
+  builtin?: boolean
+}
+
+export const BUILTIN_ANIMATIONS: AnimationEntry[] = [
+  {
+    id: 'wave',
+    name: 'Salut',
+    tag: 'wave',
+    hint: 'saluer de la main, pour dire bonjour ou au revoir',
+    url: 'animations/wave.vrma',
+    repeat: 1,
+    fullBody: false,
+    builtin: true,
+  },
+  {
+    id: 'dance',
+    name: 'Danse',
+    tag: 'dance',
+    hint: 'danser, seulement si on te le demande ou pour fêter une bonne nouvelle',
+    url: 'animations/dance.vrma',
+    repeat: 3,
+    fullBody: true,
+    builtin: true,
+  },
+]
+
 export interface Settings {
   activeProvider: ProviderId
   providers: Record<ProviderId, ProviderConfig>
@@ -170,6 +209,12 @@ export interface Settings {
     list: AvatarEntry[]
     framing: 'bust' | 'full'
     followPointer: boolean
+  }
+
+  gestures: {
+    /** L'IA peut déclencher les gestes d'elle-même avec des balises. */
+    enabled: boolean
+    list: AnimationEntry[]
   }
 
   ui: {
@@ -231,6 +276,7 @@ export function defaultSettings(): Settings {
       silenceMs: 900,
     },
     avatar: { current: SAMPLE_AVATAR.id, list: [SAMPLE_AVATAR], framing: 'bust', followPointer: true },
+    gestures: { enabled: true, list: [...BUILTIN_ANIMATIONS] },
     ui: { subtitles: true, quality: 'medium', background: '#1b1d2e' },
   }
 }
@@ -258,6 +304,7 @@ export function loadSettings(): Settings {
     const s = merge(base, JSON.parse(raw))
     // L'avatar d'exemple reste toujours disponible et à jour.
     s.avatar.list = [SAMPLE_AVATAR, ...s.avatar.list.filter((a) => a.id !== SAMPLE_AVATAR.id)]
+    s.gestures.list = [...BUILTIN_ANIMATIONS, ...s.gestures.list.filter((a) => !a.builtin)]
     return s
   } catch {
     return base

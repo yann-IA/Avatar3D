@@ -23,10 +23,15 @@
     <header class="topbar">
       <div id="persona-name" class="persona-name">Aiko</div>
       <div id="status" class="status" data-state="idle">En attente</div>
+      <button id="gesture-btn" class="icon-btn" aria-label="Gestes" title="Gestes (salut, danse…)">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M21 7a1.5 1.5 0 0 0-3 0v4.5h-.5V4a1.5 1.5 0 0 0-3 0v7.5H14V2.5a1.5 1.5 0 0 0-3 0v9h-.5V5a1.5 1.5 0 0 0-3 0v10.2l-2.3-2.4a1.6 1.6 0 0 0-2.3 2.2l4.6 5A6 6 0 0 0 11.9 22H15a6 6 0 0 0 6-6z"/></svg>
+      </button>
       <button id="settings-btn" class="icon-btn" aria-label="Réglages" title="Réglages">
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.7 7.7 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.7 7.7 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
       </button>
     </header>
+
+    <div id="gesture-menu" class="gesture-menu" hidden></div>
 
     <section id="subtitles" class="subtitles" aria-live="polite">
       <p id="user-line" class="line user"></p>

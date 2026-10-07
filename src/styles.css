@@ -307,3 +307,27 @@ h3 { margin: 8px 0 0; font-size: 0.95rem; }
   .mic-btn { width: 64px; height: 64px; }
   .subtitles { bottom: calc(env(safe-area-inset-bottom) + 100px); }
 }
+
+/* ---------- menu des gestes ---------- */
+.gesture-menu {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 64px);
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  min-width: 170px;
+  padding: 6px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  z-index: 15;
+}
+.gesture-menu button {
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  text-align: left;
+}
+.gesture-menu button:hover { background: rgba(255, 255, 255, 0.08); }
+.gesture-menu .stop { color: var(--muted); border-top: 1px solid var(--line); border-radius: 0 0 10px 10px; }

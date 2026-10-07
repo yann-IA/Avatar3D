@@ -10,11 +10,13 @@
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "fetch-avatar": "node scripts/fetch-avatar.mjs"
+    "fetch-avatar": "node scripts/fetch-avatar.mjs",
+    "build-vrma": "node scripts/build-vrma.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
     "@pixiv/three-vrm": "^3.5.5",
+    "@pixiv/three-vrm-animation": "^3.5.5",
     "three": "^0.186.1"
   },
   "devDependencies": {

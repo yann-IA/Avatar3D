@@ -13,6 +13,7 @@ Elle fonctionne dans un navigateur : **téléphone** (installable comme une appl
 | Animation | Clignements, regard qui suit la caméra ou le pointeur, respiration, balancement, gestes en parlant, tête penchée quand il écoute, regard en l'air quand il réfléchit |
 | Lèvres | Synchronisées sur le **son réel** (analyse du spectre → voyelles a/i/u/e/o) ou, avec les voix du navigateur, sur le **texte** |
 | Émotions | L'IA annote chaque phrase (`[happy]`, `[sad]`, `[surprised]`…), le visage et la posture suivent |
+| Gestes | Animations **VRMA** : salut de la main et danse fournis, import de tes propres `.vrma`. L'IA les déclenche d'elle-même (`[wave]`, `[dance]`) ou tu les lances avec le bouton ✋ |
 | IA | OpenAI, **Claude**, Groq, Mistral, OpenRouter, DeepSeek, Gemini, **Ollama**, LM Studio, ou toute API compatible OpenAI |
 | Voix | Voix de l'appareil (gratuites, réglage hauteur/vitesse), **OpenAI TTS** (avec consignes de ton), **ElevenLabs**, serveurs locaux (Kokoro…) |
 | Écoute | Reconnaissance du navigateur (gratuite) ou **Whisper** (OpenAI, Groq, serveur local) avec détection automatique de fin de phrase |
@@ -84,6 +85,27 @@ Vérifie la licence de chaque modèle. L'avatar fourni est le modèle d'exemple 
 Les expressions utilisées sont celles du standard VRM (`happy`, `sad`, `angry`, `surprised`, `relaxed`,
 `aa`/`ih`/`ou`/`ee`/`oh`, `blink`) : tout modèle VRM correct les possède.
 
+## Gestes et animations (VRMA)
+
+Le format **VRMA** (VRM Animation) décrit un mouvement qui s'applique à n'importe quel avatar VRM.
+Deux animations sont fournies :
+
+| Geste | Balise de l'IA | Comportement |
+|---|---|---|
+| Salut de la main | `[wave]` | Pour dire bonjour ou au revoir ; l'avatar continue de te regarder et de parler |
+| Danse | `[dance]` | Quand tu le lui demandes ou pour fêter quelque chose ; la caméra recule pour montrer tout le corps |
+
+- **Bouton ✋** (en haut) : lance un geste à la main. **Échap** arrête l'animation en cours.
+- **⚙ → Gestes** : importe tes fichiers `.vrma`. Chacun reçoit une balise tirée de son nom (« Grand salut »
+  devient `[grand-salut]`) et l'IA est prévenue qu'elle peut l'utiliser. Une case permet de désactiver les
+  gestes spontanés de l'IA.
+- Où trouver des VRMA : des packs gratuits (dont celui de VRoid) sur [Booth](https://booth.pm/en/search/VRMA),
+  en vérifiant leur licence, ou crée les tiennes dans Blender avec l'extension VRM.
+
+Les deux animations fournies sont générées par `scripts/build-vrma.mjs`. Chaque mouvement y est décrit par une
+fonction du temps, ce qui permet de les retoucher facilement ou d'en ajouter. Relance ensuite
+`npm run build-vrma` pour regénérer `public/animations/*.vrma`.
+
 ## Changer de voix et de ton
 
 | Moteur | Coût | Ton de voix |
@@ -133,6 +155,7 @@ src/
 ├── settings.ts             réglages, fournisseurs, sauvegarde locale
 ├── avatar/
 │   ├── stage.ts            scène three.js + VRM : pose, respiration, clignements, regard, émotions
+│   ├── gestures.ts         lecture des animations VRMA, mélangées à l'animation procédurale
 │   └── lipsync.ts          synchronisation labiale (son réel ou texte)
 ├── core/
 │   ├── conversation.ts     orchestration écoute → IA → voix, interruptions, mains libres
@@ -145,7 +168,7 @@ src/
 ```
 
 Commandes : `npm run dev` (développement), `npm run build` (version optimisée dans `dist/`),
-`npm test` (tests unitaires), `npm run typecheck`.
+`npm test` (tests unitaires), `npm run typecheck`, `npm run build-vrma` (regénère les animations fournies).
 
 Pour déboguer, ajoute `?debug` à l'URL : l'objet `stage` est alors accessible dans la console.
 
@@ -158,7 +181,7 @@ Pour déboguer, ajoute `?debug` à l'URL : l'objet `stage` est alors accessible 
 
 ## Pistes pour aller plus loin
 
-- Animations VRMA (danse, salut…) avec `@pixiv/three-vrm-animation`
+- Plus d'animations fournies (applaudir, révérence, réfléchir…) dans `scripts/build-vrma.mjs`
 - Avatars Live2D (2D) avec `pixi-live2d-display`
 - Mot d'éveil (« Hé Aiko ») et détection de voix plus fine (Silero VAD en WebAssembly)
 - Mémoire à long terme (résumés de conversations sauvegardés)

@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { VRMLoaderPlugin, VRMUtils, type VRM, type VRMHumanBoneName } from '@pixiv/three-vrm'
 import type { Emotion } from '../core/emotion'
+import { GesturePlayer } from './gestures'
 import { SILENT, type MouthDriver, type Visemes } from './lipsync'
 
 export type Activity = 'idle' | 'listening' | 'thinking' | 'speaking'
@@ -38,9 +39,15 @@ export class AvatarStage {
   private readonly lookTarget = new THREE.Object3D()
   private readonly pointer = new THREE.Vector2()
 
+  readonly gestures = new GesturePlayer()
   private vrm: VRM | null = null
   private headHeight = 1.4
   private framing: 'bust' | 'full' = 'bust'
+  private hipsRest = new THREE.Vector3()
+  /** Cadrage temporaire pendant un geste (null = cadrage normal). */
+  private gestureFraming: 'upper' | 'full' | null = null
+  /** Position visée par la caméra pendant un changement de cadrage animé. */
+  private cameraGoal: { target: THREE.Vector3; position: THREE.Vector3 } | null = null
   followPointer = true
 
   private mouth: MouthDriver | null = null
@@ -81,6 +88,7 @@ export class AvatarStage {
     this.controls.minPolarAngle = Math.PI * 0.2
     this.controls.maxPolarAngle = Math.PI * 0.75
 
+    this.controls.addEventListener('start', () => (this.cameraGoal = null)) // l'utilisateur reprend la main
     window.addEventListener('resize', () => this.resize())
     window.addEventListener('pointermove', (e) => {
       this.pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1)
@@ -105,7 +113,7 @@ export class AvatarStage {
     this.renderer.setSize(w, h, false)
     this.camera.aspect = w / h
     this.camera.updateProjectionMatrix()
-    if (this.vrm) this.setFraming(this.framing)
+    if (this.vrm) this.frameCamera(this.gestureFraming ?? this.framing, true)
   }
 
   /** Charge un avatar .vrm (VRM 0.x ou 1.0). `url` peut être une URL blob: pour un fichier local. */
@@ -133,13 +141,15 @@ export class AvatarStage {
     this.vrm = vrm
     this.scene.add(vrm.scene)
     if (vrm.lookAt) vrm.lookAt.target = this.lookTarget
+    this.hipsRest.fromArray(vrm.humanoid.normalizedRestPose.hips?.position ?? [0, 1, 0])
+    this.gestures.attach(vrm)
 
     this.applyRestPose(0)
     vrm.update(0)
     vrm.scene.updateMatrixWorld(true)
     const head = vrm.humanoid.getNormalizedBoneNode('head')
     this.headHeight = head ? head.getWorldPosition(new THREE.Vector3()).y : 1.4
-    this.setFraming(this.framing)
+    this.setFraming(this.framing, true)
   }
 
   get loaded(): boolean {
@@ -147,20 +157,61 @@ export class AvatarStage {
   }
 
   /** Cadrage de la caméra : buste (conversation) ou corps entier, adapté à la forme de l'écran. */
-  setFraming(mode: 'bust' | 'full'): void {
+  setFraming(mode: 'bust' | 'full', instant = false): void {
     this.framing = mode
+    this.frameCamera(mode, instant)
+  }
+
+  private frameCamera(mode: 'bust' | 'upper' | 'full', instant: boolean): void {
     const h = this.headHeight
     const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))
     const aspect = this.camera.aspect
     // Taille de la zone à montrer (largeur, hauteur) en mètres.
-    const [w, ht] = mode === 'bust' ? [0.42, 0.65] : [0.9, h * 1.25]
+    const [w, ht] = mode === 'bust' ? [0.42, 0.65] : mode === 'upper' ? [1.3, 0.95] : [0.9, h * 1.25]
     const dist = Math.max(ht / 2 / tanV, w / 2 / (tanV * aspect))
     const span = 2 * dist * tanV
     // Visage placé dans le tiers supérieur de l'écran en mode buste.
-    const ty = mode === 'bust' ? h - 0.09 - Math.max(0, span - ht) * 0.3 : h * 0.55
-    this.controls.target.set(0, ty, 0)
-    this.camera.position.set(0, ty + (mode === 'bust' ? 0.02 : 0.1), dist)
-    this.controls.update()
+    const ty =
+      mode === 'bust'
+        ? h - 0.09 - Math.max(0, span - ht) * 0.3
+        : mode === 'upper'
+          ? h - 0.2 - Math.max(0, span - ht) * 0.3
+          : h * 0.55
+    const target = new THREE.Vector3(0, ty, 0)
+    const position = new THREE.Vector3(0, ty + (mode === 'bust' ? 0.02 : 0.1), dist)
+    if (instant) {
+      this.cameraGoal = null
+      this.controls.target.copy(target)
+      this.camera.position.copy(position)
+      this.controls.update()
+    } else {
+      this.cameraGoal = { target, position }
+    }
+  }
+
+  /**
+   * Joue une animation VRMA. En cadrage buste, la caméra recule le temps de l'animation pour
+   * que les bras restent visibles (tout le corps avec `fullBody`, utile pour une danse).
+   */
+  async playGesture(url: string, repeat = 1, fullBody = false): Promise<void> {
+    if (!this.vrm) return
+    const done = this.gestures.play(url, repeat)
+    if (this.framing === 'bust') {
+      this.gestureFraming = fullBody ? 'full' : 'upper'
+      this.frameCamera(this.gestureFraming, false)
+    }
+    try {
+      await done
+    } finally {
+      if (this.gestureFraming && !this.gestures.playing) {
+        this.gestureFraming = null
+        this.frameCamera(this.framing, false)
+      }
+    }
+  }
+
+  stopGesture(): void {
+    this.gestures.stop()
   }
 
   setMouth(driver: MouthDriver | null): void {
@@ -188,6 +239,12 @@ export class AvatarStage {
 
   /** Bras le long du corps (les VRM sont modélisés en « T »), respiration et petits mouvements. */
   private applyRestPose(t: number): void {
+    // Repart d'une pose neutre : une animation VRMA a pu modifier n'importe quel os.
+    for (const name of Object.keys(this.vrm!.humanoid.humanBones) as VRMHumanBoneName[]) {
+      this.bone(name)?.quaternion.identity()
+    }
+    this.bone('hips')?.position.copy(this.hipsRest)
+
     const breath = Math.sin(t * 1.7)
     const sway = Math.sin(t * 0.45)
     const talk = this.talkLevel
@@ -312,6 +369,12 @@ export class AvatarStage {
     this.timer.update()
     const dt = Math.min(this.timer.getDelta(), 0.1)
     this.time += dt
+    if (this.cameraGoal) {
+      const k = 1 - Math.exp(-3 * dt)
+      this.controls.target.lerp(this.cameraGoal.target, k)
+      this.camera.position.lerp(this.cameraGoal.position, k)
+      if (this.camera.position.distanceTo(this.cameraGoal.position) < 0.002) this.cameraGoal = null
+    }
     this.controls.update()
     if (this.vrm) {
       this.talkLevel = damp(this.talkLevel, this.mouth ? 0.6 + this.mouthOpen() * 0.4 : 0, 3, dt)
@@ -319,6 +382,7 @@ export class AvatarStage {
       this.updateBlink(dt)
       this.updateLook(dt)
       this.updateHead(dt)
+      this.gestures.update(dt)
       this.updateExpressions(dt)
       this.vrm.update(dt)
     }

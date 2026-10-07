@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SentenceChunker } from '../src/core/chunker'
-import type { Segment } from '../src/core/emotion'
+import { gestureMap, slugify, type Segment } from '../src/core/emotion'
 
 function run(deltas: string[]): Segment[] {
   const out: Segment[] = []
@@ -46,5 +46,46 @@ describe('SentenceChunker', () => {
     const out = run(['[joie] *sourit* **Super** idée 😄 ! Allons-y.'])
     expect(out.map((s) => s.text)).toEqual(['Super idée !', 'Allons-y.'])
     expect(out[0].emotion).toBe('happy')
+  })
+})
+
+describe('gestes', () => {
+  const gestures = gestureMap([
+    { id: 'wave', tag: 'wave', name: 'Salut' },
+    { id: 'dance', tag: 'dance', name: 'Danse' },
+  ])
+  const runG = (deltas: string[]) => {
+    const out: Segment[] = []
+    const c = new SentenceChunker((s) => out.push(s), gestures)
+    deltas.forEach((d) => c.push(d))
+    c.flush()
+    return out
+  }
+
+  it('reconnaît une balise de geste et ses synonymes français', () => {
+    const out = runG(['[happy][wa', 've] Coucou, ravie de te revoir ! [danser] Allez, on fête ça ensemble !'])
+    expect(out).toEqual([
+      { text: 'Coucou, ravie de te revoir !', emotion: 'happy', gesture: 'wave' },
+      { text: 'Allez, on fête ça ensemble !', emotion: 'happy', gesture: 'dance' },
+    ])
+  })
+
+  it('émet un geste seul quand il n’y a pas de texte', () => {
+    expect(runG(['[dance]'])).toEqual([{ text: '', emotion: 'neutral', gesture: 'dance' }])
+  })
+
+  it('ignore les balises de geste inconnues ou désactivées', () => {
+    const out: Segment[] = []
+    const c = new SentenceChunker((s) => out.push(s))
+    c.push('[wave] Bonjour à toi, comment vas-tu ?')
+    c.flush()
+    expect(out).toEqual([{ text: 'Bonjour à toi, comment vas-tu ?', emotion: 'neutral' }])
+  })
+})
+
+describe('slugify', () => {
+  it('produit une balise simple', () => {
+    expect(slugify('Salut Joyeux ! (v2)')).toBe('salut-joyeux-v2')
+    expect(slugify('Révérence')).toBe('reverence')
   })
 })

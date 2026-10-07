@@ -10,6 +10,7 @@ export class SentenceChunker {
 
   constructor(
     private readonly onSegment: (s: Segment) => void,
+    private readonly gestures?: Map<string, string>,
     private readonly minLength = 12,
     private readonly maxLength = 220,
   ) {}
@@ -30,9 +31,10 @@ export class SentenceChunker {
   }
 
   private emit(raw: string): void {
-    const seg = parseSegment(raw, this.emotion)
+    const seg = parseSegment(raw, this.emotion, this.gestures)
     this.emotion = seg.emotion
     if (/[\p{L}\p{N}]/u.test(seg.text)) this.onSegment(seg)
+    else if (seg.gesture) this.onSegment({ ...seg, text: '' }) // geste seul, sans paroles
   }
 
   /** Position de coupe (exclusive) ou -1 si aucune phrase n'est encore terminée. */

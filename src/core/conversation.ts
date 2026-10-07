@@ -6,13 +6,15 @@ import { createSTT, type STTEngine } from '../stt/engines'
 import { createTTS } from '../tts/engines'
 import { SpeechQueue } from '../tts/queue'
 import { SentenceChunker } from './chunker'
-import { EMOTION_INSTRUCTIONS, type Emotion, type Segment } from './emotion'
+import { EMOTION_INSTRUCTIONS, gestureInstructions, gestureMap, type Emotion, type Segment } from './emotion'
 
 export interface ConversationEvents {
   onState(state: Activity): void
   onUserText(text: string, final: boolean): void
   onAssistantText(text: string): void
   onEmotion(e: Emotion): void
+  /** L'IA a demandé un geste (identifiant d'animation). */
+  onGesture(id: string): void
   onMouth(driver: MouthDriver | null): void
   onMicLevel(level: number): void
   onError(message: string): void
@@ -43,6 +45,7 @@ export class Conversation {
       onSegmentStart: (seg) => {
         this.spoken += (this.spoken ? ' ' : '') + seg.text
         this.ev.onEmotion(seg.emotion)
+        if (seg.gesture) this.ev.onGesture(seg.gesture)
         this.ev.onAssistantText(this.spoken)
       },
       onMouth: (d) => this.ev.onMouth(d),
@@ -119,11 +122,17 @@ export class Conversation {
     this.abort = new AbortController()
     this.llmDone = false
     this.spoken = ''
+    const gestures = this.settings.gestures.enabled ? gestureMap(this.settings.gestures.list) : undefined
     const chunker = new SentenceChunker((seg: Segment) => {
       if (turn !== this.turn) return
+      if (!seg.text) {
+        // Geste sans paroles : on le joue tout de suite.
+        if (seg.gesture) this.ev.onGesture(seg.gesture)
+        return
+      }
       if (this.state === 'thinking') this.setState('speaking')
       this.queue.push(seg)
-    })
+    }, gestures)
 
     try {
       const llm = createLLM(this.settings)
@@ -185,6 +194,7 @@ export class Conversation {
   private systemPrompt(): string {
     const p = this.settings.persona
     const lang = new Intl.DisplayNames(['fr'], { type: 'language' }).of(p.language.slice(0, 2)) ?? p.language
-    return `${p.prompt.trim()}\n\nTon nom est ${p.name}. Réponds en ${lang}.\n\n${EMOTION_INSTRUCTIONS}`
+    const gestures = this.settings.gestures.enabled ? gestureInstructions(this.settings.gestures.list) : ''
+    return `${p.prompt.trim()}\n\nTon nom est ${p.name}. Réponds en ${lang}.\n\n${EMOTION_INSTRUCTIONS}${gestures ? '\n' + gestures : ''}`
   }
 }

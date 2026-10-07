@@ -1,8 +1,9 @@
 import './styles.css'
 import { AvatarStage } from './avatar/stage'
 import { Conversation } from './core/conversation'
+import { slugify } from './core/emotion'
 import { createLLM } from './llm'
-import { PROVIDERS, loadSettings, saveSettings, type AvatarEntry } from './settings'
+import { PROVIDERS, loadSettings, saveSettings, type AnimationEntry, type AvatarEntry } from './settings'
 import { deleteAvatarFile, loadAvatarFile, saveAvatarFile } from './storage'
 import { unlockAudio } from './tts/audio'
 import { createTTS, listElevenLabsVoices } from './tts/engines'
@@ -52,6 +53,7 @@ const convo = new Conversation(settings, {
     aiLine.scrollTop = aiLine.scrollHeight
   },
   onEmotion: (e) => stage.setEmotion(e),
+  onGesture: (id) => void playGesture(id),
   onMouth: (d) => stage.setMouth(d),
   onMicLevel: (l) => micBtn.style.setProperty('--level', String(l)),
   onError: (m) => toast(m),
@@ -95,11 +97,64 @@ window.addEventListener('keydown', (e) => {
     void talk()
   } else if (e.code === 'Escape') {
     if (panel.isOpen) panel.close()
-    else convo.interrupt()
+    else if (!gestureMenu.hidden) gestureMenu.hidden = true
+    else {
+      convo.interrupt()
+      stage.stopGesture()
+    }
   }
 })
 
 $('settings-btn').addEventListener('click', () => panel.toggle())
+
+/* ------------------------------- Gestes ------------------------------- */
+
+const gestureMenu = $('gesture-menu')
+const animationUrls = new Map<string, string>()
+
+async function resolveAnimationUrl(a: AnimationEntry): Promise<string> {
+  if (!a.url.startsWith('idb:')) return a.url
+  let url = animationUrls.get(a.id)
+  if (!url) {
+    const blob = await loadAvatarFile(a.url.slice(4))
+    if (!blob) throw new Error('Fichier d\u2019animation introuvable dans le stockage du navigateur.')
+    url = URL.createObjectURL(blob)
+    animationUrls.set(a.id, url)
+  }
+  return url
+}
+
+async function playGesture(id: string): Promise<void> {
+  const entry = settings.gestures.list.find((a) => a.id === id)
+  if (!entry || !stage.loaded) return
+  try {
+    await stage.playGesture(await resolveAnimationUrl(entry), entry.repeat, entry.fullBody)
+  } catch (e) {
+    toast(`Animation « ${entry.name} » : ${(e as Error).message}`)
+  }
+}
+
+function renderGestureMenu(): void {
+  gestureMenu.innerHTML =
+    settings.gestures.list
+      .map((a) => `<button data-gesture="${a.id}">${a.name.replace(/[<>&]/g, '')}</button>`)
+      .join('') + '<button data-gesture="" class="stop">■ Arrêter</button>'
+}
+
+$('gesture-btn').addEventListener('click', () => {
+  renderGestureMenu()
+  gestureMenu.hidden = !gestureMenu.hidden
+})
+gestureMenu.addEventListener('click', (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-gesture]')
+  if (!btn) return
+  gestureMenu.hidden = true
+  if (btn.dataset.gesture) void playGesture(btn.dataset.gesture)
+  else stage.stopGesture()
+})
+document.addEventListener('pointerdown', (e) => {
+  if (!(e.target as HTMLElement).closest('#gesture-menu, #gesture-btn')) gestureMenu.hidden = true
+})
 
 /* ------------------------------- Avatars ------------------------------- */
 
@@ -200,6 +255,43 @@ const panel = new SettingsPanel(settings, {
     saveSettings(settings)
     panel.render()
   },
+  playGesture: (id) => void playGesture(id),
+  async importAnimation(file) {
+    const id = `anim-${Date.now().toString(36)}`
+    const name = file.name.replace(/\.vrma$/i, '')
+    try {
+      await saveAvatarFile(id, file)
+      const entry: AnimationEntry = {
+        id,
+        name,
+        tag: slugify(name) || id,
+        hint: name,
+        url: `idb:${id}`,
+        repeat: 1,
+        fullBody: true,
+      }
+      await stage.gestures.load(await resolveAnimationUrl(entry)) // vérifie que le fichier est lisible
+      settings.gestures.list.push(entry)
+      saveSettings(settings)
+      panel.render()
+      void playGesture(id)
+    } catch (e) {
+      animationUrls.delete(id)
+      await deleteAvatarFile(id).catch(() => {})
+      toast(`Import impossible : ${(e as Error).message}`)
+    }
+  },
+  async removeAnimation(id) {
+    const entry = settings.gestures.list.find((a) => a.id === id)
+    if (!entry || entry.builtin) return
+    settings.gestures.list = settings.gestures.list.filter((a) => a.id !== id)
+    if (entry.url.startsWith('idb:')) await deleteAvatarFile(entry.url.slice(4)).catch(() => {})
+    const url = animationUrls.get(id)
+    if (url) URL.revokeObjectURL(url)
+    animationUrls.delete(id)
+    saveSettings(settings)
+    panel.render()
+  },
   clearHistory() {
     convo.clearHistory()
     userLine.textContent = ''
@@ -215,7 +307,11 @@ $('subtitles').classList.toggle('hidden', !settings.ui.subtitles)
 stage.followPointer = settings.avatar.followPointer
 stage.setQuality(settings.ui.quality)
 stage.setBackground(settings.ui.background)
-void loadAvatar(settings.avatar.current).then(() => stage.setFraming(settings.avatar.framing))
+void loadAvatar(settings.avatar.current).then(() => {
+  stage.setFraming(settings.avatar.framing, true)
+  // Précharge les gestes fournis pour qu'ils démarrent sans délai.
+  for (const a of settings.gestures.list) if (a.builtin) void stage.gestures.load(a.url).catch(() => {})
+})
 
 if (needsSetup()) {
   toast('Bienvenue ! Ouvre les réglages (⚙) pour choisir ton IA et sa voix.', 'info', 9000)
