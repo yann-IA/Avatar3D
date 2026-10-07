@@ -19,9 +19,25 @@ Elle fonctionne dans un navigateur : **téléphone** (installable comme une appl
 | Écoute | Reconnaissance du navigateur (gratuite) ou **Whisper** (OpenAI, Groq, serveur local) avec détection automatique de fin de phrase |
 | Conversation | Réponses en flux (l'avatar commence à parler dès la première phrase), interruption à tout moment, mode mains libres, mémoire réglable |
 
-## Démarrage rapide
+## Installation facile sous Windows (sans taper de commande)
 
-Il faut [Node.js](https://nodejs.org) 20 ou plus.
+1. **Installe Node.js** : sur [nodejs.org](https://nodejs.org), télécharge la version **LTS**, ouvre le fichier
+   `.msi` et clique sur « Suivant » jusqu'au bout. Redémarre ensuite le PC.
+2. **Télécharge l'application** : sur cette page GitHub, bouton vert **Code** → **Download ZIP**, puis clic droit
+   sur le fichier → **Extraire tout…** (par exemple dans `Documents`).
+3. **Double-clique sur `Demarrer.bat`** dans le dossier extrait.
+   - Si Windows affiche « Windows a protégé votre ordinateur », clique sur **Informations complémentaires** puis
+     **Exécuter quand même** : c'est normal pour un fichier téléchargé.
+   - La première fois, l'installation des composants prend 1 à 3 minutes.
+   - L'application s'ouvre ensuite dans Chrome (ou Edge). **Laisse la fenêtre noire ouverte** pendant
+     l'utilisation ; ferme-la pour arrêter.
+4. Les fois suivantes, il suffit de double-cliquer à nouveau sur `Demarrer.bat`.
+
+Puis règle l'IA et la voix comme expliqué ci-dessous (étapes 1 à 3).
+
+## Démarrage rapide (ligne de commande)
+
+Il faut [Node.js](https://nodejs.org) 20.19 ou plus récent (22.12+ pour lancer les tests).
 
 ```bash
 git clone https://github.com/yann-IA/Avatar3D.git

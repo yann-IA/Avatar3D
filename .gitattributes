@@ -1,0 +1,3 @@
+# Les fichiers .bat sont stockés tels quels, avec leurs fins de ligne Windows (CRLF) :
+# sans cela, cmd.exe peut mal les exécuter, y compris depuis le ZIP téléchargé sur GitHub.
+*.bat -text
