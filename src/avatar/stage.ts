@@ -43,6 +43,8 @@ export class AvatarStage {
   readonly gestures = new GesturePlayer()
   private vrm: VRM | null = null
   private headHeight = 1.4
+  /** Point le plus haut du modèle (cheveux, antenne…), pour cadrer les têtes de toutes tailles. */
+  private modelTop = 1.6
   private framing: 'bust' | 'full' = 'bust'
   private hipsRest = new THREE.Vector3()
   /** Cadrage temporaire pendant un geste (null = cadrage normal). */
@@ -151,6 +153,7 @@ export class AvatarStage {
     vrm.scene.updateMatrixWorld(true)
     const head = vrm.humanoid.getNormalizedBoneNode('head')
     this.headHeight = head ? head.getWorldPosition(new THREE.Vector3()).y : 1.4
+    this.modelTop = Math.max(this.headHeight + 0.1, new THREE.Box3().setFromObject(vrm.scene).max.y)
     this.setFraming(this.framing, true)
   }
 
@@ -166,21 +169,32 @@ export class AvatarStage {
 
   private frameCamera(mode: 'bust' | 'upper' | 'full', instant: boolean): void {
     const h = this.headHeight
+    const top = this.modelTop
+    // Hauteur de la tête (grosse chez un avatar « chibi ») et taille globale par rapport à un humain.
+    const head = Math.max(0.15, top - h)
+    const scale = top / 1.55
     const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))
     const aspect = this.camera.aspect
     // Taille de la zone à montrer (largeur, hauteur) en mètres.
-    const [w, ht] = mode === 'bust' ? [0.42, 0.65] : mode === 'upper' ? [1.3, 0.95] : [0.9, h * 1.25]
+    const [w, ht] =
+      mode === 'bust'
+        ? [Math.max(0.42, head * 1.5), Math.max(0.65, head * 1.9)]
+        : mode === 'upper'
+          ? [1.3 * scale, 0.95 * scale]
+          : [0.9 * scale, top * 1.12]
     const dist = Math.max(ht / 2 / tanV, w / 2 / (tanV * aspect))
     const span = 2 * dist * tanV
-    // Visage placé dans le tiers supérieur de l'écran en mode buste.
-    const ty =
+    // Visage placé dans le tiers supérieur de l'écran en mode buste, sans couper le haut de la tête.
+    const faceY = h + head * 0.4
+    let ty =
       mode === 'bust'
-        ? h - 0.09 - Math.max(0, span - ht) * 0.3
+        ? faceY - ht * 0.25 - Math.max(0, span - ht) * 0.3
         : mode === 'upper'
-          ? h - 0.2 - Math.max(0, span - ht) * 0.3
-          : h * 0.55
+          ? h - 0.2 * scale - Math.max(0, span - ht) * 0.3
+          : top * 0.5
+    ty = Math.max(ty, top + 0.03 * scale - span / 2)
     const target = new THREE.Vector3(0, ty, 0)
-    const position = new THREE.Vector3(0, ty + (mode === 'bust' ? 0.02 : 0.1), dist)
+    const position = new THREE.Vector3(0, ty + (mode === 'bust' ? 0.02 : 0.1 * scale), dist)
     if (instant) {
       this.cameraGoal = null
       this.controls.target.copy(target)

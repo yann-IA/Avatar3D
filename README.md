@@ -100,14 +100,29 @@ chromium-browser --kiosk --autoplay-policy=no-user-gesture-required http://local
 
 ## Changer d'avatar
 
-**⚙ → Avatar** : « Importer un fichier .vrm » (il est conservé dans le navigateur) ou colle une URL.
+Quatre avatars sont fournis, à choisir dans **⚙ → Avatar** :
+
+| Avatar | Description |
+|---|---|
+| Exemple pixiv | Personnage d'anime (modèle d'exemple VRM 1.0 de pixiv) |
+| Léo | Un homme, style figurine |
+| Bip | Un petit robot à écran, avec une antenne qui ballotte |
+| Dino | Un dinosaure tout rond, avec une queue qui remue |
+
+Léo, Bip et Dino sont des créations originales du projet, en domaine public (CC0). Ils sont générés par
+`scripts/build-avatars.mjs` à partir de formes simples, avec toutes les expressions VRM (yeux, bouche pour la
+parole, émotions, regard). Pour retoucher leurs couleurs ou leurs formes, modifie ce script puis lance
+`npm run build-avatars`. Pense aussi à adapter le nom et la voix dans ⚙ → Personnage et ⚙ → Voix.
+
+Pour ajouter tes propres avatars : « Importer un fichier .vrm » (il est conservé dans le navigateur), ou colle
+une URL.
 
 - [VRoid Studio](https://vroid.com/studio) : crée ton propre personnage, gratuitement, puis exporte-le en VRM.
 - [VRoid Hub](https://hub.vroid.com) : des milliers de modèles, dont beaucoup sont téléchargeables.
 - [Booth](https://booth.pm) : modèles gratuits et payants.
 
-Vérifie la licence de chaque modèle. L'avatar fourni est le modèle d'exemple de pixiv
-(`VRM1_Constraint_Twist_Sample`), dont la licence autorise la redistribution.
+Vérifie la licence de chaque modèle. Le modèle d'exemple de pixiv (`VRM1_Constraint_Twist_Sample`) est
+fourni avec une licence qui autorise la redistribution.
 
 Les expressions utilisées sont celles du standard VRM (`happy`, `sad`, `angry`, `surprised`, `relaxed`,
 `aa`/`ih`/`ou`/`ee`/`oh`, `blink`) : tout modèle VRM correct les possède.
@@ -183,6 +198,7 @@ src/
 ├── avatar/
 │   ├── stage.ts            scène three.js + VRM : pose, respiration, clignements, regard, émotions
 │   ├── gestures.ts         lecture des animations VRMA, mélangées à l'animation procédurale
+│   ├── hair.ts             réglage des collisions des mèches longues (évite qu'elles traversent le corps)
 │   └── lipsync.ts          synchronisation labiale (son réel ou texte)
 ├── core/
 │   ├── conversation.ts     orchestration écoute → IA → voix, interruptions, mains libres
@@ -195,7 +211,7 @@ src/
 ```
 
 Commandes : `npm run dev` (développement), `npm run build` (version optimisée dans `dist/`),
-`npm test` (tests unitaires), `npm run typecheck`, `npm run build-vrma` (regénère les animations fournies).
+`npm test` (tests unitaires), `npm run typecheck`, `npm run build-vrma` (regénère les animations fournies), `npm run build-avatars` (regénère Léo, Bip et Dino).
 
 Pour déboguer, ajoute `?debug` à l'URL : l'objet `stage` est alors accessible dans la console.
 

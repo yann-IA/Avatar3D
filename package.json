@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "fetch-avatar": "node scripts/fetch-avatar.mjs",
-    "build-vrma": "node scripts/build-vrma.mjs"
+    "build-vrma": "node scripts/build-vrma.mjs",
+    "build-avatars": "node scripts/build-avatars.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

@@ -234,6 +234,14 @@ export const SAMPLE_AVATAR: AvatarEntry = {
   builtin: true,
 }
 
+/** Avatars créés pour l'application (voir scripts/build-avatars.mjs). */
+export const BUILTIN_AVATARS: AvatarEntry[] = [
+  SAMPLE_AVATAR,
+  { id: 'leo', name: 'Léo (homme)', url: 'avatars/leo.vrm', builtin: true },
+  { id: 'bip', name: 'Bip (petit robot)', url: 'avatars/bip.vrm', builtin: true },
+  { id: 'dino', name: 'Dino (dinosaure)', url: 'avatars/dino.vrm', builtin: true },
+]
+
 export const DEFAULT_PROMPT = `Tu es Aiko, une compagne virtuelle chaleureuse, curieuse et pleine d'humour.
 Tu discutes à l'oral avec ton interlocuteur : réponds en phrases courtes et naturelles (2 à 4 phrases en général), comme dans une vraie conversation.`
 
@@ -277,7 +285,7 @@ export function defaultSettings(): Settings {
       whisper: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'whisper-1' },
       silenceMs: 900,
     },
-    avatar: { current: SAMPLE_AVATAR.id, list: [SAMPLE_AVATAR], framing: 'bust', followPointer: true },
+    avatar: { current: SAMPLE_AVATAR.id, list: [...BUILTIN_AVATARS], framing: 'bust', followPointer: true },
     gestures: { enabled: true, list: [...BUILTIN_ANIMATIONS] },
     ui: { subtitles: true, quality: 'medium', background: '#1b1d2e' },
   }
@@ -305,7 +313,7 @@ export function loadSettings(): Settings {
     if (!raw) return base
     const s = merge(base, JSON.parse(raw))
     // L'avatar d'exemple reste toujours disponible et à jour.
-    s.avatar.list = [SAMPLE_AVATAR, ...s.avatar.list.filter((a) => a.id !== SAMPLE_AVATAR.id)]
+    s.avatar.list = [...BUILTIN_AVATARS, ...s.avatar.list.filter((a) => !a.builtin)]
     s.gestures.list = [...BUILTIN_ANIMATIONS, ...s.gestures.list.filter((a) => !a.builtin)]
     // Clés enregistrées avec un espace ou un retour à la ligne collé par erreur.
     for (const p of Object.values(s.providers)) p.apiKey = p.apiKey.trim()
