@@ -27,7 +27,8 @@ interface Playing {
  */
 export class GesturePlayer {
   private readonly cache = new Map<string, Promise<VRMAnimation>>()
-  private readonly clips = new WeakMap<VRMAnimation, THREE.AnimationClip>()
+  /** Clips adaptés à l'avatar courant (hauteur des hanches comprise) : vidé à chaque changement d'avatar. */
+  private clips = new WeakMap<VRMAnimation, THREE.AnimationClip>()
   private vrm: VRM | null = null
   private current: Playing | null = null
   private readonly q = new THREE.Quaternion()
@@ -36,6 +37,7 @@ export class GesturePlayer {
   attach(vrm: VRM): void {
     this.stop(0)
     this.vrm = vrm
+    this.clips = new WeakMap()
   }
 
   get playing(): boolean {
@@ -70,7 +72,7 @@ export class GesturePlayer {
     this.stop(0)
 
     let clip = this.clips.get(anim)
-    if (!clip || !clip.tracks.every((t) => vrm.scene.getObjectByName(THREE.PropertyBinding.parseTrackName(t.name).nodeName))) {
+    if (!clip) {
       clip = createVRMAnimationClip(anim, vrm)
       this.clips.set(anim, clip)
     }
