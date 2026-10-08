@@ -7,6 +7,7 @@ import { createTTS } from '../tts/engines'
 import { SpeechQueue } from '../tts/queue'
 import { SentenceChunker } from './chunker'
 import { EMOTION_INSTRUCTIONS, gestureInstructions, gestureMap, type Emotion, type Segment } from './emotion'
+import type { MemoryManager } from './memory'
 
 export interface ConversationEvents {
   onState(state: Activity): void
@@ -19,6 +20,8 @@ export interface ConversationEvents {
   onMicLevel(level: number): void
   onError(message: string): void
 }
+
+const HISTORY_KEY = 'companion.history.v1'
 
 /** Phrases que Whisper « entend » souvent dans le silence ou le bruit : on les ignore. */
 const HALLUCINATIONS = /amara\.org|sous-titr|merci d'avoir regardé|thanks for watching|^\W*$/i
@@ -40,7 +43,15 @@ export class Conversation {
   constructor(
     private readonly settings: Settings,
     private readonly ev: ConversationEvents,
+    private readonly memory?: MemoryManager,
   ) {
+    // La conversation en cours survit à un rechargement de la page.
+    try {
+      const saved = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]') as ChatMessage[]
+      if (Array.isArray(saved)) this.history = saved.filter((m) => m && typeof m.content === 'string')
+    } catch {
+      /* historique illisible */
+    }
     this.queue = new SpeechQueue(createTTS(settings), {
       onSegmentStart: (seg) => {
         this.spoken += (this.spoken ? ' ' : '') + seg.text
@@ -66,6 +77,23 @@ export class Conversation {
   clearHistory(): void {
     this.interrupt()
     this.history = []
+    this.saveHistory()
+  }
+
+  /** Dernier échange enregistré (pour réafficher les sous-titres après un rechargement). */
+  get lastExchange(): { user: string; assistant: string } | null {
+    const h = this.history
+    const a = h[h.length - 1]
+    const u = h[h.length - 2]
+    return a?.role === 'assistant' && u?.role === 'user' ? { user: u.content, assistant: a.content } : null
+  }
+
+  private saveHistory(): void {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(this.history))
+    } catch {
+      /* stockage plein ou bloqué */
+    }
   }
 
   private setState(s: Activity): void {
@@ -86,6 +114,7 @@ export class Conversation {
   private async listen(): Promise<void> {
     const stt = createSTT(this.settings)
     this.stt = stt
+    this.memory?.postpone() // l'utilisateur parle : on attend la fin de la conversation pour mémoriser
     this.setState('listening')
     try {
       const text = await stt.listen({
@@ -117,6 +146,7 @@ export class Conversation {
     this.ev.onAssistantText('')
     this.history.push({ role: 'user', content: text })
     this.trimHistory()
+    this.memory?.postpone()
     this.setState('thinking')
 
     this.abort = new AbortController()
@@ -137,7 +167,7 @@ export class Conversation {
     try {
       const llm = createLLM(this.settings)
       const reply = await llm.streamChat({
-        system: this.systemPrompt(),
+        system: this.systemPrompt(text),
         messages: this.history,
         signal: this.abort.signal,
         onText: (d) => chunker.push(d),
@@ -145,6 +175,11 @@ export class Conversation {
       if (turn !== this.turn) return
       chunker.flush()
       this.history.push({ role: 'assistant', content: reply })
+      this.saveHistory()
+      this.memory?.observe([
+        { role: 'user', content: text },
+        { role: 'assistant', content: reply },
+      ])
     } catch (err) {
       if (turn !== this.turn || (err as Error).name === 'AbortError' || this.abort?.signal.aborted) return
       this.history.pop() // la question sans réponse ne doit pas rester dans l'historique
@@ -172,7 +207,11 @@ export class Conversation {
     if (this.queue.busy) {
       // Garder dans l'historique ce qui a vraiment été dit avant l'interruption.
       const last = this.history[this.history.length - 1]
-      if (this.spoken && last?.role === 'user') this.history.push({ role: 'assistant', content: this.spoken + '…' })
+      if (this.spoken && last?.role === 'user') {
+        this.history.push({ role: 'assistant', content: this.spoken + '…' })
+        this.saveHistory()
+        this.memory?.observe([last, { role: 'assistant', content: this.spoken + '…' }])
+      }
     }
     this.queue.stop()
     this.ev.onMouth(null)
@@ -191,10 +230,11 @@ export class Conversation {
     while (this.history.length && this.history[0].role !== 'user') this.history.shift()
   }
 
-  private systemPrompt(): string {
+  private systemPrompt(query: string): string {
     const p = this.settings.persona
     const lang = new Intl.DisplayNames(['fr'], { type: 'language' }).of(p.language.slice(0, 2)) ?? p.language
     const gestures = this.settings.gestures.enabled ? gestureInstructions(this.settings.gestures.list) : ''
-    return `${p.prompt.trim()}\n\nTon nom est ${p.name}. Réponds en ${lang}.\n\n${EMOTION_INSTRUCTIONS}${gestures ? '\n' + gestures : ''}`
+    const memories = this.memory?.promptFor(query) ?? ''
+    return `${p.prompt.trim()}\n\nTon nom est ${p.name}. Réponds en ${lang}.${memories ? '\n\n' + memories : ''}\n\n${EMOTION_INSTRUCTIONS}${gestures ? '\n' + gestures : ''}`
   }
 }

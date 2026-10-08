@@ -154,6 +154,24 @@ Les deux animations fournies sont générées par `scripts/build-vrma.mjs`. Chaq
 fonction du temps, ce qui permet de les retoucher facilement ou d'en ajouter. Relance ensuite
 `npm run build-vrma` pour regénérer `public/animations/*.vrma`.
 
+## Mémoire à long terme
+
+Le personnage se souvient de toi d'une conversation à l'autre :
+
+- **Retenir** : quand la conversation marque une pause, l'application demande à l'IA de noter les informations
+  durables qu'elle a apprises (ton prénom, tes goûts, tes proches, tes projets, les événements importants…). Un
+  petit message « 💭 … retient » le signale. Tu peux aussi dire « retiens que… » ou « oublie que… ».
+- **Se rappeler** : à chaque message, les souvenirs utiles sont rappelés au personnage (tous s'il y en a peu,
+  sinon ceux qui ont un rapport avec ce que tu dis, plus les plus récents).
+- **Garder la main** : **⚙ → Mémoire** liste les souvenirs, permet d'en ajouter, d'en supprimer, de tout oublier,
+  de les exporter (sauvegarde ou transfert vers un autre appareil) et de les réimporter. La mémoire peut aussi
+  être désactivée.
+
+Les souvenirs sont partagés par tous les avatars. Ils sont enregistrés uniquement dans ton navigateur et envoyés
+au fournisseur d'IA avec tes messages. Chaque mémorisation est une petite requête supplémentaire auprès de ce
+fournisseur. La conversation en cours est elle aussi conservée si tu recharges la page (« Effacer la
+conversation » dans ⚙ → IA la remet à zéro, sans toucher aux souvenirs).
+
 ## Changer de voix et de ton
 
 | Moteur | Coût | Ton de voix |
@@ -209,6 +227,7 @@ src/
 │   └── lipsync.ts          synchronisation labiale (son réel ou texte)
 ├── core/
 │   ├── conversation.ts     orchestration écoute → IA → voix, interruptions, mains libres
+│   ├── memory.ts           mémoire à long terme : extraction, stockage et rappel des souvenirs
 │   ├── chunker.ts          découpe le flux en phrases prononçables
 │   └── emotion.ts          balises d'émotion et nettoyage du texte (markdown, emojis…)
 ├── llm/                    clients IA (compatible OpenAI, Anthropic)
@@ -234,5 +253,4 @@ Pour déboguer, ajoute `?debug` à l'URL : l'objet `stage` est alors accessible 
 - Plus d'animations fournies (applaudir, révérence, réfléchir…) dans `scripts/build-vrma.mjs`
 - Avatars Live2D (2D) avec `pixi-live2d-display`
 - Mot d'éveil (« Hé Aiko ») et détection de voix plus fine (Silero VAD en WebAssembly)
-- Mémoire à long terme (résumés de conversations sauvegardés)
 - Application native (Capacitor pour Android/iOS, Tauri pour le bureau)

@@ -1,7 +1,8 @@
 import './styles.css'
 import { AvatarStage } from './avatar/stage'
 import { Conversation } from './core/conversation'
-import { slugify } from './core/emotion'
+import { parseSegment, slugify } from './core/emotion'
+import { MemoryManager } from './core/memory'
 import { DEFAULT_PROFILES, applyProfile, resetProfile, switchProfile } from './profiles'
 import { createLLM } from './llm'
 import { PROVIDERS, loadSettings, saveSettings, type AnimationEntry, type AvatarEntry } from './settings'
@@ -46,6 +47,15 @@ const STATE_LABELS = { idle: 'En attente', listening: 'J’écoute…', thinking
 
 /* ---------------------------- Conversation ---------------------------- */
 
+const memory = new MemoryManager(settings)
+memory.onChange((added) => {
+  if (added.length) {
+    const more = added.length > 1 ? ` (+${added.length - 1})` : ''
+    toast(`💭 ${settings.persona.name} retient : « ${added[0].text} »${more}`, 'info', 4000)
+  }
+  panel.refresh('memoire')
+})
+
 const convo = new Conversation(settings, {
   onState: (s) => {
     statusEl.dataset.state = s
@@ -67,7 +77,7 @@ const convo = new Conversation(settings, {
   onMouth: (d) => stage.setMouth(d),
   onMicLevel: (l) => micBtn.style.setProperty('--level', String(l)),
   onError: (m) => toast(m),
-})
+}, memory)
 
 function needsSetup(): boolean {
   const preset = PROVIDERS[settings.activeProvider]
@@ -227,6 +237,7 @@ const panel = new SettingsPanel(settings, {
   onChange(path) {
     if (path.startsWith('tts.') || path === 'persona.language' || path === 'useProxy') convo.reloadVoice()
     if (path === 'persona.name') $('persona-name').textContent = settings.persona.name
+    if (path === 'memory.enabled' && !settings.memory.enabled) memory.disable()
     if (path === 'avatar.framing') stage.setFraming(settings.avatar.framing)
     if (path === 'avatar.followPointer') stage.followPointer = settings.avatar.followPointer
     if (path === 'ui.quality') stage.setQuality(settings.ui.quality)
@@ -320,6 +331,31 @@ const panel = new SettingsPanel(settings, {
     panel.render()
     toast(`Personnage d\u2019origine de ${settings.persona.name} rétabli.`, 'info', 3000)
   },
+  memory: () => memory,
+  memoryAdd: (text) => memory.add(text),
+  memoryRemove: (id) => memory.remove(id),
+  memoryClear() {
+    if (confirm(`Effacer tous les souvenirs ? ${settings.persona.name} oubliera tout ce qu’il sait de toi.`)) memory.clear()
+  },
+  async memoryFlush() {
+    const n = await memory.flush()
+    if (!n) toast('Rien de nouveau à retenir pour le moment.', 'info', 2500)
+  },
+  memoryExport() {
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([memory.exportJSON()], { type: 'application/json' }))
+    a.download = `avatar3d-memoire-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+  },
+  async memoryImport(file) {
+    try {
+      const n = memory.importJSON(await file.text())
+      toast(`${n} souvenir${n > 1 ? 's' : ''} importé${n > 1 ? 's' : ''}.`, 'info', 3000)
+    } catch (e) {
+      toast(`Import impossible : ${(e as Error).message}`)
+    }
+  },
   clearHistory() {
     convo.clearHistory()
     userLine.textContent = ''
@@ -331,6 +367,14 @@ const panel = new SettingsPanel(settings, {
 /* ------------------------------ Démarrage ------------------------------ */
 
 $('persona-name').textContent = settings.persona.name
+// Réaffiche le dernier échange de la conversation reprise.
+{
+  const last = convo.lastExchange
+  if (last) {
+    userLine.textContent = last.user
+    aiLine.textContent = parseSegment(last.assistant, 'neutral').text
+  }
+}
 $('subtitles').classList.toggle('hidden', !settings.ui.subtitles)
 stage.followPointer = settings.avatar.followPointer
 stage.setQuality(settings.ui.quality)

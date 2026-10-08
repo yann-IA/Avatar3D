@@ -1,3 +1,4 @@
+import type { MemoryManager } from '../core/memory'
 import { DEFAULT_PROFILES } from '../profiles'
 import { HOSTED, PROVIDERS, getPath, saveSettings, setPath, type ProviderId, type Settings } from '../settings'
 import { browserVoices } from '../tts/engines'
@@ -16,13 +17,21 @@ export interface PanelActions {
   importAnimation(file: File): void
   removeAnimation(id: string): void
   resetPersona(): void
+  memory(): MemoryManager
+  memoryAdd(text: string): void
+  memoryRemove(id: string): void
+  memoryClear(): void
+  memoryFlush(): Promise<void>
+  memoryExport(): void
+  memoryImport(file: File): void
   clearHistory(): void
 }
 
-type Tab = 'ia' | 'perso' | 'voix' | 'ecoute' | 'avatar' | 'gestes' | 'affichage'
+type Tab = 'ia' | 'perso' | 'memoire' | 'voix' | 'ecoute' | 'avatar' | 'gestes' | 'affichage'
 const TABS: [Tab, string][] = [
   ['ia', 'IA'],
   ['perso', 'Personnage'],
+  ['memoire', 'Mémoire'],
   ['voix', 'Voix'],
   ['ecoute', 'Écoute'],
   ['avatar', 'Avatar'],
@@ -118,6 +127,11 @@ export class SettingsPanel {
     this.tab = tab
     for (const b of this.tabs.querySelectorAll<HTMLElement>('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === tab))
     this.render()
+  }
+
+  /** Ré-affiche l'onglet s'il est actuellement visible (ex. : nouveaux souvenirs). */
+  refresh(tab: Tab): void {
+    if (this.isOpen && this.tab === tab) this.render()
   }
 
   render(): void {
@@ -349,6 +363,40 @@ export class SettingsPanel {
           ),
         ].join('')
 
+      case 'memoire': {
+        const mem = this.actions.memory()
+        const date = new Intl.DateTimeFormat('fr', { day: 'numeric', month: 'short', year: 'numeric' })
+        const items = [...mem.items].sort((a, b) => b.created - a.created)
+        return [
+          check('Mémoire à long terme', 'memory.enabled'),
+          hint(
+            'Après chaque conversation, l’IA note les informations durables sur toi (prénom, goûts, proches, projets, événements…) et les rappelle au personnage les fois suivantes. Les souvenirs sont partagés par tous les avatars. Ils sont enregistrés uniquement dans ce navigateur et envoyés au fournisseur d’IA avec tes messages. Chaque mémorisation est une petite requête supplémentaire. Tu peux aussi dire « retiens que… » ou « oublie que… ».',
+          ),
+          mem.pending.length
+            ? `<div class="row"><span class="hint grow">${mem.pending.length} message${mem.pending.length > 1 ? 's' : ''} en attente de mémorisation${mem.busy ? '…' : ''}</span>
+               <button class="btn" data-action="mem-flush" ${mem.busy ? 'disabled' : ''}>Mémoriser maintenant</button></div>`
+            : '',
+          `<div class="row"><input id="mem-new" class="grow" type="text" placeholder="Ajouter un souvenir (ex. : J’adore le jazz)"
+             style="padding:9px 11px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:inherit;font-size:16px">
+           <button class="btn" data-action="mem-add">Ajouter</button></div>`,
+          `<h3>${items.length} souvenir${items.length > 1 ? 's' : ''}</h3>`,
+          items.length
+            ? `<div class="avatar-list">${items
+                .map(
+                  (m) => `<div class="avatar-item memory-item">
+                    <span class="grow"><span class="memory-text">${esc(m.text)}</span>
+                      <small class="hint">${date.format(m.created)}${m.by ? ` · avec ${esc(m.by)}` : ''}</small></span>
+                    <button class="btn danger" data-action="mem-rm" data-id="${esc(m.id)}" aria-label="Oublier ce souvenir" title="Oublier">✕</button>
+                  </div>`,
+                )
+                .join('')}</div>`
+            : hint('Aucun souvenir pour l’instant : discute un peu, et reviens voir ici !'),
+          `<div class="row"><button class="btn" data-action="mem-export">Exporter</button>
+             <label class="btn">Importer<input id="mem-import" type="file" accept=".json,application/json" hidden></label>
+             <button class="btn danger" data-action="mem-clear" style="margin-left:auto">Tout oublier</button></div>`,
+        ].join('')
+      }
+
       case 'affichage':
         return [
           check('Sous-titres', 'ui.subtitles'),
@@ -415,6 +463,24 @@ export class SettingsPanel {
       this.actions.addAvatarUrl(name, url)
     })
     on('reset-persona', () => this.actions.resetPersona())
+    const addMemory = () => {
+      const input = this.body.querySelector<HTMLInputElement>('#mem-new')
+      if (input?.value.trim()) this.actions.memoryAdd(input.value)
+    }
+    on('mem-add', addMemory)
+    this.body.querySelector<HTMLInputElement>('#mem-new')?.addEventListener('keydown', (e) => e.key === 'Enter' && addMemory())
+    on('mem-rm', (el) => this.actions.memoryRemove(el.dataset.id!))
+    on('mem-clear', () => this.actions.memoryClear())
+    on('mem-export', () => this.actions.memoryExport())
+    on('mem-flush', (el) => {
+      el.setAttribute('disabled', '')
+      el.textContent = '…'
+      void this.actions.memoryFlush().finally(() => this.refresh('memoire'))
+    })
+    this.body.querySelector<HTMLInputElement>('#mem-import')?.addEventListener('change', (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (file) this.actions.memoryImport(file)
+    })
     on('play-gesture', (el) => this.actions.playGesture(el.dataset.id!))
     on('rm-gesture', (el) => this.actions.removeAnimation(el.dataset.id!))
     this.body.querySelector<HTMLInputElement>('#vrma-file')?.addEventListener('change', (e) => {

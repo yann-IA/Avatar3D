@@ -217,6 +217,11 @@ export interface Settings {
     followPointer: boolean
   }
 
+  memory: {
+    /** Mémoire à long terme : souvenirs extraits des conversations et rappelés au personnage. */
+    enabled: boolean
+  }
+
   /** Personnage (nom, personnalité, voix) mémorisé pour chaque avatar, par identifiant d'avatar. */
   profiles: Record<string, AvatarProfile>
 
@@ -294,6 +299,7 @@ export function defaultSettings(): Settings {
       silenceMs: 900,
     },
     avatar: { current: SAMPLE_AVATAR.id, list: [...BUILTIN_AVATARS], framing: 'bust', followPointer: true },
+    memory: { enabled: true },
     profiles: {},
     gestures: { enabled: true, list: [...BUILTIN_ANIMATIONS] },
     ui: { subtitles: true, quality: 'medium', background: '#1b1d2e' },
