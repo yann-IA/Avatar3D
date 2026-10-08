@@ -1,3 +1,4 @@
+import { DEFAULT_PROFILES } from '../profiles'
 import { HOSTED, PROVIDERS, getPath, saveSettings, setPath, type ProviderId, type Settings } from '../settings'
 import { browserVoices } from '../tts/engines'
 import { browserSTTAvailable } from '../stt/engines'
@@ -14,6 +15,7 @@ export interface PanelActions {
   playGesture(id: string): void
   importAnimation(file: File): void
   removeAnimation(id: string): void
+  resetPersona(): void
   clearHistory(): void
 }
 
@@ -197,15 +199,23 @@ export class SettingsPanel {
         ].join('')
       }
 
-      case 'perso':
+      case 'perso': {
+        const avatar = s.avatar.list.find((a) => a.id === s.avatar.current)
         return [
+          hint(
+            `Ces réglages, ainsi que la voix et son ton, sont propres à l’avatar <b>${esc(avatar?.name ?? '')}</b> : chaque avatar garde son personnage quand tu en changes.`,
+          ),
           text('Nom', 'persona.name'),
           select('Langue', 'persona.language', LANGUAGES),
           `<label class="field"><span>Personnalité (prompt système)</span><textarea data-path="persona.prompt"></textarea></label>`,
           hint(
-            'Décris son caractère, sa façon de parler, ce qu’elle sait de toi… Les consignes d’émotion (balises [happy], [sad]…) sont ajoutées automatiquement : c’est ce qui fait réagir le visage de l’avatar.',
+            'Décris son caractère, sa façon de parler, ce qu’il ou elle sait de toi… Les consignes d’émotion (balises [happy], [sad]…) sont ajoutées automatiquement : c’est ce qui fait réagir le visage de l’avatar.',
           ),
+          DEFAULT_PROFILES[s.avatar.current]
+            ? `<button class="btn" data-action="reset-persona">Rétablir le personnage d’origine (${esc(DEFAULT_PROFILES[s.avatar.current].name)})</button>`
+            : '',
         ].join('')
+      }
 
       case 'voix': {
         const engine = select('Moteur de voix', 'tts.engine', [
@@ -221,7 +231,7 @@ export class SettingsPanel {
           const sorted = [...voices.filter((v) => v.lang.startsWith(lang)), ...voices.filter((v) => !v.lang.startsWith(lang))]
           return [
             engine,
-            select('Voix', 'tts.browserVoice', [['', 'Automatique'], ...sorted.map((v): [string, string] => [v.voiceURI, `${v.name} (${v.lang})`])]),
+            select('Voix', 'tts.browserVoice', [['', `Automatique (${{ female: 'voix féminine', male: 'voix masculine', any: 'meilleure voix' }[s.tts.voiceHint]})`], ...sorted.map((v): [string, string] => [v.voiceURI, `${v.name} (${v.lang})`])]),
             voices.length ? '' : hint('Aucune voix trouvée pour l’instant (elles se chargent parfois après quelques secondes).'),
             range('Hauteur (ton)', 'tts.pitch', 0.5, 2, 0.05),
             range('Vitesse', 'tts.rate', 0.5, 2, 0.05),
@@ -404,6 +414,7 @@ export class SettingsPanel {
       const name = decodeURIComponent(url.split('/').pop() ?? 'Avatar').replace(/\.vrm$/i, '')
       this.actions.addAvatarUrl(name, url)
     })
+    on('reset-persona', () => this.actions.resetPersona())
     on('play-gesture', (el) => this.actions.playGesture(el.dataset.id!))
     on('rm-gesture', (el) => this.actions.removeAnimation(el.dataset.id!))
     this.body.querySelector<HTMLInputElement>('#vrma-file')?.addEventListener('change', (e) => {

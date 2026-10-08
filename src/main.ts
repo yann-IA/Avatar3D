@@ -2,6 +2,7 @@ import './styles.css'
 import { AvatarStage } from './avatar/stage'
 import { Conversation } from './core/conversation'
 import { slugify } from './core/emotion'
+import { DEFAULT_PROFILES, applyProfile, resetProfile, switchProfile } from './profiles'
 import { createLLM } from './llm'
 import { PROVIDERS, loadSettings, saveSettings, type AnimationEntry, type AvatarEntry } from './settings'
 import { deleteAvatarFile, loadAvatarFile, saveAvatarFile } from './storage'
@@ -10,6 +11,15 @@ import { createTTS, listElevenLabsVoices } from './tts/engines'
 import { SettingsPanel } from './ui/panel'
 
 const settings = loadSettings()
+// Première version avec un personnage par avatar : si Léo, Bip ou Dino était déjà choisi
+// avec le personnage par défaut (Aiko), il reçoit le sien.
+{
+  const own = DEFAULT_PROFILES[settings.avatar.current]
+  if (own && !Object.keys(settings.profiles).length && settings.avatar.current !== 'sample' && settings.persona.name === DEFAULT_PROFILES.sample.name) {
+    applyProfile(settings, own)
+    saveSettings(settings)
+  }
+}
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T
 
 const stage = new AvatarStage($<HTMLCanvasElement>('stage'))
@@ -189,14 +199,26 @@ async function loadAvatar(id: string): Promise<void> {
   try {
     const url = await resolveAvatarUrl(entry)
     await stage.load(url, (r) => (loaderText.textContent = `Chargement de « ${entry.name} »… ${Math.round(r * 100)} %`))
+    // Chaque avatar a son personnage : on mémorise celui de l'avatar quitté et on charge le sien.
+    const changed = switchProfile(settings, settings.avatar.current, entry.id)
     settings.avatar.current = entry.id
     saveSettings(settings)
+    if (changed) {
+      personaChanged()
+      toast(`${settings.persona.name} est là ! Son nom, sa personnalité et sa voix sont chargés.`, 'info', 3500)
+    }
   } catch (e) {
     toast(`Impossible de charger l’avatar : ${(e as Error).message}`)
   } finally {
     loader.hidden = true
     if (panel.isOpen) panel.render()
   }
+}
+
+/** Le personnage a changé (nom, voix…) : mise à jour de l'affichage et de la voix. */
+function personaChanged(): void {
+  $('persona-name').textContent = settings.persona.name
+  convo.reloadVoice()
 }
 
 /* ------------------------------ Réglages ------------------------------ */
@@ -291,6 +313,12 @@ const panel = new SettingsPanel(settings, {
     animationUrls.delete(id)
     saveSettings(settings)
     panel.render()
+  },
+  resetPersona() {
+    if (!resetProfile(settings)) return
+    personaChanged()
+    panel.render()
+    toast(`Personnage d\u2019origine de ${settings.persona.name} rétabli.`, 'info', 3000)
   },
   clearHistory() {
     convo.clearHistory()

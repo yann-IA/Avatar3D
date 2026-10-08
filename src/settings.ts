@@ -1,3 +1,5 @@
+import type { AvatarProfile, VoiceHint } from './profiles'
+
 export type ProviderId =
   | 'openai'
   | 'anthropic'
@@ -191,6 +193,8 @@ export interface Settings {
 
   tts: {
     engine: TTSEngineId
+    /** Type de voix cherché quand la voix de l'appareil est en « Automatique ». */
+    voiceHint: VoiceHint
     browserVoice: string
     pitch: number
     rate: number
@@ -212,6 +216,9 @@ export interface Settings {
     framing: 'bust' | 'full'
     followPointer: boolean
   }
+
+  /** Personnage (nom, personnalité, voix) mémorisé pour chaque avatar, par identifiant d'avatar. */
+  profiles: Record<string, AvatarProfile>
 
   gestures: {
     /** L'IA peut déclencher les gestes d'elle-même avec des balises. */
@@ -242,7 +249,7 @@ export const BUILTIN_AVATARS: AvatarEntry[] = [
   { id: 'dino', name: 'Dino (dinosaure)', url: 'avatars/dino.vrm', builtin: true },
 ]
 
-export const DEFAULT_PROMPT = `Tu es Aiko, une compagne virtuelle chaleureuse, curieuse et pleine d'humour.
+export const DEFAULT_PROMPT = `Tu es une compagne virtuelle chaleureuse, curieuse et pleine d'humour.
 Tu discutes à l'oral avec ton interlocuteur : réponds en phrases courtes et naturelles (2 à 4 phrases en général), comme dans une vraie conversation.`
 
 function defaultProviders(): Record<ProviderId, ProviderConfig> {
@@ -265,6 +272,7 @@ export function defaultSettings(): Settings {
     persona: { name: 'Aiko', prompt: DEFAULT_PROMPT, language: 'fr-FR' },
     tts: {
       engine: 'browser',
+      voiceHint: 'female',
       browserVoice: '',
       pitch: 1.15,
       rate: 1.05,
@@ -286,6 +294,7 @@ export function defaultSettings(): Settings {
       silenceMs: 900,
     },
     avatar: { current: SAMPLE_AVATAR.id, list: [...BUILTIN_AVATARS], framing: 'bust', followPointer: true },
+    profiles: {},
     gestures: { enabled: true, list: [...BUILTIN_ANIMATIONS] },
     ui: { subtitles: true, quality: 'medium', background: '#1b1d2e' },
   }

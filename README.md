@@ -102,20 +102,26 @@ chromium-browser --kiosk --autoplay-policy=no-user-gesture-required http://local
 
 Quatre avatars sont fournis, à choisir dans **⚙ → Avatar** :
 
-| Avatar | Description |
-|---|---|
-| Exemple pixiv | Personnage d'anime (modèle d'exemple VRM 1.0 de pixiv) |
-| Léo | Un homme, style figurine |
-| Bip | Un petit robot à écran, avec une antenne qui ballotte |
-| Dino | Un dinosaure tout rond, avec une queue qui remue |
+| Avatar | Personnage par défaut | Voix par défaut |
+|---|---|---|
+| Exemple pixiv | **Aiko**, chaleureuse, curieuse et pleine d'humour | féminine, douce et enjouée (OpenAI : `nova`) |
+| Léo (homme, style figurine) | **Léo**, posé, drôle, amateur de musique et de cinéma | masculine, posée et chaleureuse (OpenAI : `ash`) |
+| Bip (petit robot à écran, antenne qui ballotte) | **Bip**, robot curieux qui découvre le monde des humains | aiguë et rythmée, « petit robot » (OpenAI : `alloy`) |
+| Dino (dinosaure tout rond, queue qui remue) | **Dino**, petit dinosaure joyeux et gourmand | enfantine et pétillante (OpenAI : `fable`) |
+
+**Chaque avatar a son propre personnage** : nom, personnalité, voix et ton. Quand tu changes d'avatar,
+l'application mémorise ce que tu avais réglé pour le précédent et charge le personnage du nouveau. Tes retouches
+sont donc conservées pour chacun, et ⚙ → Personnage → « Rétablir le personnage d'origine » les annule. Avec les
+voix de l'appareil, l'application choisit automatiquement une voix masculine ou féminine selon le personnage
+(d'après le nom des voix installées), sauf si tu en choisis une précise.
 
 Léo, Bip et Dino sont des créations originales du projet, en domaine public (CC0). Ils sont générés par
 `scripts/build-avatars.mjs` à partir de formes simples, avec toutes les expressions VRM (yeux, bouche pour la
 parole, émotions, regard). Pour retoucher leurs couleurs ou leurs formes, modifie ce script puis lance
-`npm run build-avatars`. Pense aussi à adapter le nom et la voix dans ⚙ → Personnage et ⚙ → Voix.
+`npm run build-avatars`. Leurs personnages par défaut sont définis dans `src/profiles.ts`.
 
 Pour ajouter tes propres avatars : « Importer un fichier .vrm » (il est conservé dans le navigateur), ou colle
-une URL.
+une URL. Un avatar importé reprend le personnage actuel, que tu peux ensuite modifier : il le gardera.
 
 - [VRoid Studio](https://vroid.com/studio) : crée ton propre personnage, gratuitement, puis exporte-le en VRM.
 - [VRoid Hub](https://hub.vroid.com) : des milliers de modèles, dont beaucoup sont téléchargeables.
@@ -195,6 +201,7 @@ micro ─► reconnaissance vocale ─► texte
 src/
 ├── main.ts                 assemblage de l'interface
 ├── settings.ts             réglages, fournisseurs, sauvegarde locale
+├── profiles.ts             personnage (nom, personnalité, voix) propre à chaque avatar
 ├── avatar/
 │   ├── stage.ts            scène three.js + VRM : pose, respiration, clignements, regard, émotions
 │   ├── gestures.ts         lecture des animations VRMA, mélangées à l'animation procédurale

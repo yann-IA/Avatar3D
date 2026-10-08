@@ -1,5 +1,6 @@
 import { AudioLipSync, TextLipSync, type MouthDriver } from '../avatar/lipsync'
 import { describeError } from '../llm/openai'
+import { pickVoice } from '../profiles'
 import { viaProxy, type Settings } from '../settings'
 import { audioContext } from './audio'
 
@@ -33,11 +34,8 @@ export class BrowserTTS implements TTSEngine<string> {
       const u = new SpeechSynthesisUtterance(text)
       const voices = browserVoices()
       const lang = this.s.persona.language
-      u.voice =
-        voices.find((v) => v.voiceURI === t.browserVoice) ??
-        voices.find((v) => v.lang === lang) ??
-        voices.find((v) => v.lang.startsWith(lang.slice(0, 2))) ??
-        null
+      // Voix choisie dans les réglages, sinon une voix adaptée au personnage (féminine, masculine…).
+      u.voice = voices.find((v) => v.voiceURI === t.browserVoice) ?? pickVoice(voices, lang, t.voiceHint)
       u.lang = u.voice?.lang ?? lang
       u.pitch = t.pitch
       u.rate = t.rate
