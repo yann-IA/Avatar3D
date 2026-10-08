@@ -96,11 +96,13 @@ const dance = {
       leftHand: [0, 0.2, -0.2],
       rightHand: [0, -0.2, 0.2],
     }
+    // Bras levés en V (pas à la verticale : les manches amples retomberaient devant la
+    // poitrine et passeraient devant les cheveux).
     const armsB = {
-      leftUpperArm: [0, 0, 1.05 + 0.25 * sway],
-      rightUpperArm: [0, 0, -1.05 + 0.25 * sway],
-      leftLowerArm: [0, 0, 0.35 + 0.25 * beat],
-      rightLowerArm: [0, 0, -0.35 - 0.25 * beat],
+      leftUpperArm: [0, 0, 0.55 + 0.2 * sway],
+      rightUpperArm: [0, 0, -0.55 + 0.2 * sway],
+      leftLowerArm: [0, 0, 0.3 + 0.25 * beat],
+      rightLowerArm: [0, 0, -0.3 - 0.25 * beat],
       leftHand: [0, 0, 0.2 * sway],
       rightHand: [0, 0, 0.2 * sway],
     }

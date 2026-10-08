@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { VRMLoaderPlugin, VRMUtils, type VRM, type VRMHumanBoneName } from '@pixiv/three-vrm'
 import type { Emotion } from '../core/emotion'
 import { GesturePlayer } from './gestures'
+import { padLongHair } from './hair'
 import { SILENT, type MouthDriver, type Visemes } from './lipsync'
 
 export type Activity = 'idle' | 'listening' | 'thinking' | 'speaking'
@@ -141,6 +142,7 @@ export class AvatarStage {
     this.vrm = vrm
     this.scene.add(vrm.scene)
     if (vrm.lookAt) vrm.lookAt.target = this.lookTarget
+    padLongHair(vrm) // évite que les mèches longues traversent la poitrine quand l'avatar bouge
     this.hipsRest.fromArray(vrm.humanoid.normalizedRestPose.hips?.position ?? [0, 1, 0])
     this.gestures.attach(vrm)
 
