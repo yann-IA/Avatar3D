@@ -331,3 +331,8 @@ h3 { margin: 8px 0 0; font-size: 0.95rem; }
 }
 .gesture-menu button:hover { background: rgba(255, 255, 255, 0.08); }
 .gesture-menu .stop { color: var(--muted); border-top: 1px solid var(--line); border-radius: 0 0 10px 10px; }
+
+/* ---------- champs de clé API ---------- */
+.field .secret { -webkit-text-security: disc; font-family: monospace; }
+.field .secret.revealed { -webkit-text-security: none; }
+.field .saved { color: var(--listen); font-size: 0.8rem; margin-left: 6px; }

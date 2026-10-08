@@ -32,9 +32,21 @@ const esc = (s: unknown) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
 /* Petits constructeurs HTML ; `data-path` relie le champ au réglage correspondant. */
-const text = (label: string, path: string, opts: { type?: string; placeholder?: string; list?: string } = {}) =>
-  `<label class="field"><span>${label}</span><input type="${opts.type ?? 'text'}" data-path="${path}"
+const text = (label: string, path: string, opts: { type?: string; placeholder?: string; list?: string; trim?: boolean } = {}) =>
+  `<label class="field"><span>${label}</span><input type="${opts.type ?? 'text'}" data-path="${path}" ${opts.trim ? 'data-trim' : ''}
     placeholder="${esc(opts.placeholder)}" ${opts.list ? `list="${opts.list}"` : ''} spellcheck="false" autocapitalize="off"></label>`
+/**
+ * Champ de clé API. Volontairement PAS de type « password » : les gestionnaires de mots de
+ * passe des navigateurs enregistraient la première clé saisie et la recopiaient ensuite dans
+ * les autres champs de clé (IA, Voix, Écoute), écrasant les bonnes valeurs. La clé reste
+ * masquée à l'écran (CSS) et un bouton permet de l'afficher.
+ */
+const secret = (label: string, path: string, placeholder = '') =>
+  `<div class="field"><span>${label} <small class="saved" data-saved="${path}"></small></span>
+    <div class="row"><input type="text" class="grow secret" data-path="${path}" data-trim
+      placeholder="${esc(placeholder)}" autocomplete="off" spellcheck="false" autocapitalize="off" autocorrect="off"
+      data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" aria-label="${esc(label)}">
+    <button type="button" class="btn" data-reveal aria-label="Afficher ou masquer la clé" title="Afficher / masquer">👁</button></div></div>`
 const range = (label: string, path: string, min: number, max: number, step: number) =>
   `<label class="field"><span>${label} : <output data-out="${path}"></output></span>
     <input type="range" data-path="${path}" min="${min}" max="${max}" step="${step}"></label>`
@@ -121,11 +133,15 @@ export class SettingsPanel {
     const el = e.target as HTMLInputElement
     const path = el.dataset.path
     if (!path) return
-    const value = el.type === 'checkbox' ? el.checked : el.type === 'range' || el.type === 'number' ? Number(el.value) : el.value
+    // Les clés collées emportent souvent un espace ou un retour à la ligne : l'API les refuserait.
+    const raw = 'trim' in el.dataset ? el.value.trim() : el.value
+    const value = el.type === 'checkbox' ? el.checked : el.type === 'range' || el.type === 'number' ? Number(raw) : raw
     setPath(this.s, path, value)
     saveSettings(this.s)
     this.updateOutput(el)
+    this.flashSaved(path)
     if (e.type === 'change') {
+      if ('trim' in el.dataset) el.value = raw
       this.actions.onChange(path)
       // Certains choix changent les champs affichés.
       if (['activeProvider', 'tts.engine', 'stt.engine'].includes(path)) this.render()
@@ -147,7 +163,7 @@ export class SettingsPanel {
         return [
           select('Fournisseur', 'activeProvider', (Object.keys(PROVIDERS) as ProviderId[]).map((k) => [k, PROVIDERS[k].label])),
           preset.needsKey || s.providers[id].apiKey
-            ? text('Clé API', `${p}.apiKey`, { type: 'password', placeholder: 'sk-…' }) +
+            ? secret('Clé API', `${p}.apiKey`, 'sk-…') +
               (preset.keyUrl ? hint(`Obtenir une clé : <a href="${preset.keyUrl}" target="_blank" rel="noopener">${preset.keyUrl}</a>`) : '')
             : hint('Aucune clé nécessaire pour un serveur local.'),
           `<div class="row"><div class="grow">${text('Modèle', `${p}.model`, { list: 'model-list' })}</div>
@@ -155,9 +171,9 @@ export class SettingsPanel {
             <datalist id="model-list">${preset.models.map((m) => `<option value="${esc(m)}">`).join('')}</datalist>`,
           text('Adresse de l’API', `${p}.baseUrl`, { type: 'url' }),
           preset.kind === 'anthropic'
-            ? text('ID du workspace (facultatif)', `${p}.workspaceId`, { placeholder: 'wrkspc_…' }) +
+            ? text('ID de l\u2019espace de travail (facultatif)', `${p}.workspaceId`, { placeholder: 'wrkspc_…', trim: true }) +
               hint(
-                'À remplir seulement si Anthropic répond que la clé « n’est pas rattachée à un workspace ». L’identifiant (wrkspc_…) se trouve dans la console Anthropic, rubrique Settings → Workspaces. Autre solution : crée ta clé API à l’intérieur d’un workspace.',
+                'Le plus simple : dans la console Anthropic, crée ta clé avec une <b>Portée</b> réglée sur un espace de travail (par exemple « Default ») et laisse ce champ vide. Une clé de portée « Organisation » est déconseillée ici : elle donne aussi accès à l\u2019administration de ton organisation. Si tu en utilises quand même une, indique ici l\u2019ID de l\u2019espace de travail (wrkspc_…).',
               )
             : '',
           preset.kind === 'anthropic'
@@ -217,7 +233,7 @@ export class SettingsPanel {
         if (s.tts.engine === 'openai') {
           return [
             engine,
-            text('Clé API', 'tts.openai.apiKey', { type: 'password', placeholder: 'sk-…' }),
+            secret('Clé API (voix)', 'tts.openai.apiKey', 'sk-…'),
             text('Adresse de l’API', 'tts.openai.baseUrl', { type: 'url' }),
             text('Modèle', 'tts.openai.model', { list: 'tts-models' }),
             `<datalist id="tts-models"><option value="gpt-4o-mini-tts"><option value="tts-1"><option value="tts-1-hd"><option value="kokoro"></datalist>`,
@@ -232,7 +248,7 @@ export class SettingsPanel {
         if (s.tts.engine === 'elevenlabs') {
           return [
             engine,
-            text('Clé API', 'tts.elevenlabs.apiKey', { type: 'password' }),
+            secret('Clé API ElevenLabs', 'tts.elevenlabs.apiKey'),
             `<div class="row"><div class="grow">${text('Voix (identifiant)', 'tts.elevenlabs.voiceId', { list: 'eleven-voices' })}</div>
               <button class="btn" data-action="eleven-voices" style="align-self:flex-end">Lister</button></div>
               <datalist id="eleven-voices"></datalist>`,
@@ -264,7 +280,7 @@ export class SettingsPanel {
               )
             : [
                 text('Adresse de l’API', 'stt.whisper.baseUrl', { type: 'url' }),
-                text('Clé API', 'stt.whisper.apiKey', { type: 'password' }),
+                secret('Clé API (écoute)', 'stt.whisper.apiKey'),
                 text('Modèle', 'stt.whisper.model', { list: 'stt-models' }),
                 `<datalist id="stt-models"><option value="whisper-1"><option value="gpt-4o-mini-transcribe"><option value="whisper-large-v3-turbo"></datalist>`,
                 range('Silence de fin de phrase (ms)', 'stt.silenceMs', 400, 2500, 100),
@@ -336,9 +352,21 @@ export class SettingsPanel {
     }
   }
 
+  /** Petit « ✓ enregistrée » à côté d'une clé, pour confirmer qu'elle est bien sauvegardée. */
+  private flashSaved(path: string): void {
+    const badge = this.body.querySelector<HTMLElement>(`[data-saved="${path}"]`)
+    if (!badge) return
+    badge.textContent = '✓ enregistrée'
+    clearTimeout(Number(badge.dataset.timer))
+    badge.dataset.timer = String(window.setTimeout(() => (badge.textContent = ''), 1500))
+  }
+
   private bindButtons(): void {
     const on = (action: string, fn: (el: HTMLElement) => void) =>
       this.body.querySelectorAll<HTMLElement>(`[data-action="${action}"]`).forEach((el) => el.addEventListener('click', () => fn(el)))
+    this.body.querySelectorAll<HTMLElement>('[data-reveal]').forEach((btn) =>
+      btn.addEventListener('click', () => btn.previousElementSibling?.classList.toggle('revealed')),
+    )
 
     on('models', async (btn) => {
       btn.textContent = '…'

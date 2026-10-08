@@ -307,6 +307,11 @@ export function loadSettings(): Settings {
     // L'avatar d'exemple reste toujours disponible et à jour.
     s.avatar.list = [SAMPLE_AVATAR, ...s.avatar.list.filter((a) => a.id !== SAMPLE_AVATAR.id)]
     s.gestures.list = [...BUILTIN_ANIMATIONS, ...s.gestures.list.filter((a) => !a.builtin)]
+    // Clés enregistrées avec un espace ou un retour à la ligne collé par erreur.
+    for (const p of Object.values(s.providers)) p.apiKey = p.apiKey.trim()
+    s.tts.openai.apiKey = s.tts.openai.apiKey.trim()
+    s.tts.elevenlabs.apiKey = s.tts.elevenlabs.apiKey.trim()
+    s.stt.whisper.apiKey = s.stt.whisper.apiKey.trim()
     return s
   } catch {
     return base

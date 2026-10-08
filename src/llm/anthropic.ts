@@ -58,7 +58,7 @@ export class AnthropicClient implements LLMClient {
         throw new LLMError(
           this.opts.workspaceId?.trim()
             ? `L\u2019ID de workspace « ${this.opts.workspaceId.trim()} » est refusé : vérifie-le dans la console Anthropic (Settings → Workspaces).`
-            : 'Cette clé Anthropic n\u2019est rattachée à aucun workspace. Renseigne l\u2019« ID du workspace » (wrkspc_…) dans ⚙ → IA, ou crée une clé à l\u2019intérieur d\u2019un workspace.',
+            : 'Cette clé Anthropic a la portée « Organisation ». Crée plutôt une clé dont la Portée est un espace de travail (par exemple « Default ») dans la console Anthropic, puis colle-la dans ⚙ → IA.',
         )
       }
       if (err instanceof Anthropic.NotFoundError) throw new LLMError(`Modèle introuvable : ${model}`)
