@@ -1,7 +1,7 @@
 import { AudioLipSync, TextLipSync, type MouthDriver } from '../avatar/lipsync'
 import { describeError } from '../llm/openai'
 import { pickVoice } from '../profiles'
-import { viaProxy, type Settings } from '../settings'
+import { sharedKey, viaProxy, type Settings } from '../settings'
 import { audioContext } from './audio'
 
 /** Un moteur de synthèse vocale : `prepare` peut être lancé à l'avance pour la phrase suivante. */
@@ -121,7 +121,8 @@ export class OpenAITTS extends AudioTTS {
   protected fetchAudio(text: string): Promise<Response> {
     const o = this.s.tts.openai
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (o.apiKey) headers.Authorization = `Bearer ${o.apiKey}`
+    const key = sharedKey(this.s, o.baseUrl, o.apiKey)
+    if (key) headers.Authorization = `Bearer ${key}`
     return fetch(viaProxy(o.baseUrl.replace(/\/+$/, '') + '/audio/speech', this.s.useProxy), {
       method: 'POST',
       headers,

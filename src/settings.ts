@@ -362,6 +362,31 @@ export function saveSettings(s: Settings): void {
   }
 }
 
+/**
+ * Clé à utiliser pour un service (voix, écoute) : la sienne si elle est renseignée, sinon celle
+ * d'un autre réglage qui vise le même serveur. Une clé OpenAI saisie dans ⚙ → IA sert ainsi
+ * aussi à Whisper et aux voix OpenAI, sans avoir à la recopier.
+ */
+export function sharedKey(s: Settings, baseUrl: string, own: string): string {
+  if (own) return own
+  const host = hostOf(baseUrl)
+  if (!host) return ''
+  const candidates = [
+    ...Object.values(s.providers).map((p) => [p.baseUrl, p.apiKey]),
+    [s.tts.openai.baseUrl, s.tts.openai.apiKey],
+    [s.stt.whisper.baseUrl, s.stt.whisper.apiKey],
+  ]
+  return candidates.find(([url, key]) => key && hostOf(url) === host)?.[1] ?? ''
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return ''
+  }
+}
+
 export function getPath(obj: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], obj)
 }

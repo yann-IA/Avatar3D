@@ -2,7 +2,7 @@ import type { MemoryManager } from '../core/memory'
 import { DEFAULT_PROFILES } from '../profiles'
 import { HOSTED, PROVIDERS, getPath, saveSettings, setPath, type ProviderId, type Settings } from '../settings'
 import { browserVoices } from '../tts/engines'
-import { browserSTTAvailable } from '../stt/engines'
+import { browserSTTAvailable, sttEngineFor, whisperKey } from '../stt/engines'
 
 export interface PanelActions {
   onChange(path: string): void
@@ -48,9 +48,9 @@ const esc = (s: unknown) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
 /* Petits constructeurs HTML ; `data-path` relie le champ au réglage correspondant. */
-const text = (label: string, path: string, opts: { type?: string; placeholder?: string; list?: string; trim?: boolean } = {}) =>
+const text = (label: string, path: string, opts: { type?: string; placeholder?: string; trim?: boolean } = {}) =>
   `<label class="field"><span>${label}</span><input type="${opts.type ?? 'text'}" data-path="${path}" ${opts.trim ? 'data-trim' : ''}
-    placeholder="${esc(opts.placeholder)}" ${opts.list ? `list="${opts.list}"` : ''} spellcheck="false" autocapitalize="off"></label>`
+    placeholder="${esc(opts.placeholder)}" spellcheck="false" autocapitalize="off"></label>`
 /**
  * Champ de clé API. Volontairement PAS de type « password » : les gestionnaires de mots de
  * passe des navigateurs enregistraient la première clé saisie et la recopiaient ensuite dans
@@ -73,6 +73,19 @@ const lockedKey = (label: string, path: string) =>
   `<div class="field"><span>${label}</span>
     <div class="row"><div class="grow locked-key" aria-label="${esc(label)} : chargée depuis le coffre, masquée">🔐 Chargée depuis le coffre</div>
     <button type="button" class="btn" data-action="vault-release" data-key="${path}" title="Effacer cette clé pour en saisir une autre">Remplacer</button></div></div>`
+/**
+ * Champ texte avec une liste de choix (bouton ▾). Remplace les <datalist>, dont la liste ne défile
+ * pas sur mobile : ici la liste s'ouvre sous le champ, défile et se filtre en tapant.
+ */
+type Choice = string | [value: string, label: string]
+const combo = (label: string, path: string, choices: Choice[], extra = '') =>
+  `<div class="field"><span>${label}</span>
+    <div class="row"><input type="text" class="grow" data-path="${path}" spellcheck="false" autocapitalize="off" autocomplete="off">
+    ${extra}<button type="button" class="btn" data-pick="${path}" data-choices="${esc(JSON.stringify(choices))}" aria-label="Choisir dans la liste" title="Choisir dans la liste">▾</button></div>
+    <div class="picker" data-picker="${path}" hidden></div></div>`
+/** Modèles qui ne servent pas à discuter (écoute, voix, images…) : masqués de la liste de l'onglet IA. */
+const NON_CHAT = /whisper|transcribe|tts|speech|audio|realtime|dall-e|image|embedding|moderation|davinci|babbage|search|sora|computer-use|guard/i
+
 const range = (label: string, path: string, min: number, max: number, step: number) =>
   `<label class="field"><span>${label} : <output data-out="${path}"></output></span>
     <input type="range" data-path="${path}" min="${min}" max="${max}" step="${step}"></label>`
@@ -208,9 +221,7 @@ export class SettingsPanel {
             ? secret(s, 'Clé API', `${p}.apiKey`, 'sk-…') +
               (preset.keyUrl ? hint(`Obtenir une clé : <a href="${preset.keyUrl}" target="_blank" rel="noopener">${preset.keyUrl}</a>`) : '')
             : hint('Aucune clé nécessaire pour un serveur local.'),
-          `<div class="row"><div class="grow">${text('Modèle', `${p}.model`, { list: 'model-list' })}</div>
-            <button class="btn" data-action="models" style="align-self:flex-end">Lister</button></div>
-            <datalist id="model-list">${preset.models.map((m) => `<option value="${esc(m)}">`).join('')}</datalist>`,
+          combo('Modèle', `${p}.model`, preset.models, `<button type="button" class="btn" data-action="models">Lister</button>`),
           text('Adresse de l’API', `${p}.baseUrl`, { type: 'url' }),
           preset.kind === 'anthropic'
             ? text('ID de l\u2019espace de travail (facultatif)', `${p}.workspaceId`, { placeholder: 'wrkspc_…', trim: true }) +
@@ -296,10 +307,8 @@ export class SettingsPanel {
             engine,
             secret(s, 'Clé API (voix)', 'tts.openai.apiKey', 'sk-…'),
             text('Adresse de l’API', 'tts.openai.baseUrl', { type: 'url' }),
-            text('Modèle', 'tts.openai.model', { list: 'tts-models' }),
-            `<datalist id="tts-models"><option value="gpt-4o-mini-tts"><option value="tts-1"><option value="tts-1-hd"><option value="kokoro"></datalist>`,
-            text('Voix', 'tts.openai.voice', { list: 'tts-voices' }),
-            `<datalist id="tts-voices">${OPENAI_VOICES.map((v) => `<option value="${v}">`).join('')}<option value="ff_siwis"></datalist>`,
+            combo('Modèle', 'tts.openai.model', ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd', 'kokoro']),
+            combo('Voix', 'tts.openai.voice', [...OPENAI_VOICES, 'ff_siwis']),
             `<label class="field"><span>Ton / style de voix (gpt-4o-mini-tts)</span><textarea data-path="tts.openai.instructions" style="min-height:70px"></textarea></label>`,
             range('Vitesse', 'tts.openai.speed', 0.5, 2, 0.05),
             test,
@@ -310,9 +319,7 @@ export class SettingsPanel {
           return [
             engine,
             secret(s, 'Clé API ElevenLabs', 'tts.elevenlabs.apiKey'),
-            `<div class="row"><div class="grow">${text('Voix (identifiant)', 'tts.elevenlabs.voiceId', { list: 'eleven-voices' })}</div>
-              <button class="btn" data-action="eleven-voices" style="align-self:flex-end">Lister</button></div>
-              <datalist id="eleven-voices"></datalist>`,
+            combo('Voix (identifiant)', 'tts.elevenlabs.voiceId', [], `<button type="button" class="btn" data-action="eleven-voices">Lister</button>`),
             select('Modèle', 'tts.elevenlabs.model', [
               ['eleven_flash_v2_5', 'Flash v2.5 (le plus rapide)'],
               ['eleven_turbo_v2_5', 'Turbo v2.5'],
@@ -337,13 +344,15 @@ export class SettingsPanel {
             ? hint(
                 browserSTTAvailable()
                   ? 'Disponible dans ce navigateur. Chrome envoie l’audio aux serveurs de Google pour la transcription.'
-                  : '⚠️ Ce navigateur ne propose pas la reconnaissance vocale (c’est le cas de Firefox et de Chromium sur Raspberry Pi) : choisis Whisper.',
+                  : sttEngineFor(s) === 'whisper'
+                    ? '✅ Ce navigateur (Firefox par exemple) ne reconnaît pas la voix lui-même : Whisper est utilisé automatiquement avec ta clé OpenAI de l’onglet IA.'
+                    : '⚠️ Ce navigateur (Firefox, Chromium sur Raspberry Pi…) ne reconnaît pas la voix lui-même. Choisis « Whisper via API » ci-dessus, ou ajoute simplement une clé OpenAI dans l’onglet IA : elle servira aussi à l’écoute.',
               )
             : [
                 text('Adresse de l’API', 'stt.whisper.baseUrl', { type: 'url' }),
                 secret(s, 'Clé API (écoute)', 'stt.whisper.apiKey'),
-                text('Modèle', 'stt.whisper.model', { list: 'stt-models' }),
-                `<datalist id="stt-models"><option value="whisper-1"><option value="gpt-4o-mini-transcribe"><option value="whisper-large-v3-turbo"></datalist>`,
+                !s.stt.whisper.apiKey && whisperKey(s) ? hint('✅ Champ vide : la clé du même service saisie dans l’onglet IA est utilisée.') : '',
+                combo('Modèle', 'stt.whisper.model', ['whisper-1', 'gpt-4o-mini-transcribe', 'whisper-large-v3-turbo']),
                 range('Silence de fin de phrase (ms)', 'stt.silenceMs', 400, 2500, 100),
                 hint('Groq est très rapide et peu cher : adresse <code>https://api.groq.com/openai/v1</code>, modèle <code>whisper-large-v3-turbo</code>. En local : faster-whisper-server / speaches.'),
               ].join(''),
@@ -447,6 +456,37 @@ export class SettingsPanel {
     }
   }
 
+  /** Ouvre la liste de choix d'un champ : elle défile, se filtre en tapant, et un choix remplit le champ. */
+  private openPicker(path: string, choices: Choice[], note = ''): void {
+    const picker = this.body.querySelector<HTMLElement>(`[data-picker="${path}"]`)
+    const input = this.body.querySelector<HTMLInputElement>(`[data-path="${path}"]`)
+    if (!picker || !input) return
+    this.body.querySelectorAll<HTMLElement>('.picker').forEach((p) => (p.hidden = true))
+    const items = choices.map((c) => (typeof c === 'string' ? [c, c] : c))
+    picker.innerHTML = `${items.length > 8 ? '<input type="search" class="picker-filter" placeholder="Filtrer (ex. : gpt-4o, claude, llama…)" autocapitalize="off" spellcheck="false">' : ''}
+      <div class="picker-list" role="listbox">${
+        items.length
+          ? items
+              .map(([v, l]) => `<button type="button" role="option" data-value="${esc(v)}" class="${v === input.value ? 'current' : ''}">${esc(l)}${l !== v ? `<small>${esc(v)}</small>` : ''}</button>`)
+              .join('')
+          : '<p class="hint">Aucun choix proposé : clique sur « Lister » ou tape la valeur.</p>'
+      }</div>${note ? `<p class="hint">${esc(note)}</p>` : ''}`
+    picker.hidden = false
+    const filter = picker.querySelector<HTMLInputElement>('.picker-filter')
+    filter?.addEventListener('input', () => {
+      const q = filter.value.trim().toLowerCase()
+      picker.querySelectorAll<HTMLElement>('[data-value]').forEach((b) => (b.hidden = !!q && !b.textContent!.toLowerCase().includes(q)))
+    })
+    picker.querySelectorAll<HTMLElement>('[data-value]').forEach((b) =>
+      b.addEventListener('click', () => {
+        input.value = b.dataset.value!
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+        picker.hidden = true
+      }),
+    )
+    picker.querySelector('.current')?.scrollIntoView({ block: 'nearest' })
+  }
+
   focusField(path: string): void {
     this.body.querySelector<HTMLInputElement>(`[data-path="${path}"]`)?.focus()
   }
@@ -470,10 +510,15 @@ export class SettingsPanel {
     on('models', async (btn) => {
       btn.textContent = '…'
       try {
-        const models = await this.actions.listModels()
-        this.body.querySelector('#model-list')!.innerHTML = models.map((m) => `<option value="${esc(m)}">`).join('')
-        btn.textContent = `${models.length} trouvés`
-        this.body.querySelector<HTMLInputElement>(`[data-path="providers.${this.s.activeProvider}.model"]`)?.focus()
+        const all = await this.actions.listModels()
+        const chat = all.filter((m) => !NON_CHAT.test(m))
+        const hidden = all.length - chat.length
+        btn.textContent = `${chat.length} trouvés`
+        this.openPicker(
+          `providers.${this.s.activeProvider}.model`,
+          chat,
+          hidden ? `${hidden} modèle${hidden > 1 ? 's' : ''} qui ne servent pas à discuter (Whisper, voix, images…) ne sont pas affichés. La reconnaissance vocale Whisper se règle dans l’onglet Écoute.` : '',
+        )
       } catch (e) {
         btn.textContent = 'Échec'
         alert((e as Error).message)
@@ -483,15 +528,21 @@ export class SettingsPanel {
       btn.textContent = '…'
       try {
         const voices = await this.actions.listElevenVoices()
-        this.body.querySelector('#eleven-voices')!.innerHTML = voices
-          .map((v) => `<option value="${esc(v.voice_id)}">${esc(v.name)}</option>`)
-          .join('')
         btn.textContent = `${voices.length} voix`
+        this.openPicker('tts.elevenlabs.voiceId', voices.map((v) => [v.voice_id, v.name]))
       } catch (e) {
         btn.textContent = 'Échec'
         alert((e as Error).message)
       }
     })
+    this.body.querySelectorAll<HTMLElement>('[data-pick]').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        const path = btn.dataset.pick!
+        const picker = this.body.querySelector<HTMLElement>(`[data-picker="${path}"]`)
+        if (picker && !picker.hidden) picker.hidden = true
+        else this.openPicker(path, JSON.parse(btn.dataset.choices ?? '[]') as Choice[])
+      }),
+    )
     on('test-voice', () => this.actions.testVoice())
     on('clear', () => this.actions.clearHistory())
     on('use-avatar', (el) => this.actions.selectAvatar(el.dataset.id!))

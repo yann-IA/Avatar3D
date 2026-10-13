@@ -1,5 +1,5 @@
 import { describeError } from '../llm/openai'
-import { viaProxy, type Settings } from '../settings'
+import { sharedKey, viaProxy, type Settings } from '../settings'
 
 export interface STTCallbacks {
   /** Transcription partielle (pendant que l'utilisateur parle). */
@@ -40,6 +40,22 @@ function recognitionCtor(): SpeechRecognitionCtor | undefined {
 
 export const browserSTTAvailable = () => recognitionCtor() !== undefined
 
+const NO_BROWSER_STT =
+  'Ce navigateur ne sait pas reconnaître la voix. Ajoute une clé OpenAI dans ⚙ → IA (elle servira aussi à l’écoute), ou choisis « Whisper » dans ⚙ → Écoute avec une clé OpenAI ou Groq. Tu peux aussi écrire tes messages.'
+
+/** Clé utilisée pour Whisper : la sienne, ou celle d'OpenAI (ou Groq…) saisie dans ⚙ → IA. */
+export const whisperKey = (s: Settings) => sharedKey(s, s.stt.whisper.baseUrl, s.stt.whisper.apiKey)
+
+/**
+ * Moteur réellement utilisé : si la reconnaissance du navigateur n'existe pas (Firefox, certains
+ * mobiles, casque Quest) et qu'une clé permet d'utiliser Whisper, on bascule automatiquement.
+ */
+export function sttEngineFor(s: Settings): 'browser' | 'whisper' | 'unavailable' {
+  if (s.stt.engine === 'whisper') return 'whisper'
+  if (browserSTTAvailable()) return 'browser'
+  return whisperKey(s) ? 'whisper' : 'unavailable'
+}
+
 export class BrowserSTT implements STTEngine {
   private rec: SpeechRecognitionLike | null = null
 
@@ -49,7 +65,7 @@ export class BrowserSTT implements STTEngine {
     const Ctor = recognitionCtor()
     if (!Ctor) {
       return Promise.reject(
-        new Error("La reconnaissance vocale du navigateur n'est pas disponible ici. Choisis « Whisper » dans les réglages d'écoute."),
+        new Error(NO_BROWSER_STT),
       )
     }
     return new Promise((resolve, reject) => {
@@ -190,7 +206,7 @@ export class WhisperSTT implements STTEngine {
     form.append('response_format', 'json')
     const res = await fetch(viaProxy(w.baseUrl.replace(/\/+$/, '') + '/audio/transcriptions', this.s.useProxy), {
       method: 'POST',
-      headers: w.apiKey ? { Authorization: `Bearer ${w.apiKey}` } : {},
+      headers: whisperKey(this.s) ? { Authorization: `Bearer ${whisperKey(this.s)}` } : {},
       body: form,
     })
     if (!res.ok) throw new Error(await describeError(res))
@@ -208,5 +224,5 @@ export class WhisperSTT implements STTEngine {
 }
 
 export function createSTT(s: Settings): STTEngine {
-  return s.stt.engine === 'whisper' ? new WhisperSTT(s) : new BrowserSTT(s)
+  return sttEngineFor(s) === 'whisper' ? new WhisperSTT(s) : new BrowserSTT(s)
 }
