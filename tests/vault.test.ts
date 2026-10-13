@@ -7,8 +7,14 @@ import {
   countKeys,
   decryptVault,
   encryptVault,
+  forgetVaultKeys,
+  keyPaths,
+  loadedVaultKeys,
   parseVault,
   passphraseProblem,
+  releaseKey,
+  rememberedVault,
+  unlockVault,
 } from '../src/vault'
 
 const PASS = 'girafe lampe violon nuage'
@@ -92,5 +98,42 @@ describe('coffre à clés', () => {
   it('reconnaît seulement les fichiers de coffre', () => {
     expect(parseVault('pas du json')).toBeNull()
     expect(parseVault('{"format":"autre"}')).toBeNull()
+  })
+})
+
+describe('clés chargées depuis le coffre', () => {
+  const store = new Map<string, string>()
+  globalThis.localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => void store.set(k, v),
+  } as Storage
+
+  it('verrouille les clés chargées, puis les efface quand on désactive le coffre', async () => {
+    const file = await encryptVault(collectSecrets(configured()), PASS, FAST)
+    const s = defaultSettings()
+    s.stt.whisper.apiKey = 'gsk-saisie-a-la-main'
+    expect(await unlockVault(s, file, PASS)).toBe(3)
+    expect(s.vault.locked.sort()).toEqual(['providers.anthropic.apiKey', 'providers.openai.apiKey', 'tts.openai.apiKey'])
+    expect(loadedVaultKeys(s)).toBe(3)
+    expect(s.vault.applied).toBe(file.created)
+    expect(rememberedVault()).toEqual(file)
+
+    releaseKey(s, 'tts.openai.apiKey')
+    expect(s.tts.openai.apiKey).toBe('')
+    expect(loadedVaultKeys(s)).toBe(2)
+
+    expect(forgetVaultKeys(s)).toBe(2)
+    expect(s.providers.anthropic.apiKey).toBe('')
+    expect(s.providers.openai.apiKey).toBe('')
+    expect(s.stt.whisper.apiKey).toBe('gsk-saisie-a-la-main') // pas une clé du coffre : conservée
+    expect(s.vault).toMatchObject({ locked: [], applied: '' })
+  })
+
+  it('ne verrouille rien avec une mauvaise phrase', async () => {
+    const file = await encryptVault(collectSecrets(configured()), PASS, FAST)
+    const s = defaultSettings()
+    await expect(unlockVault(s, file, 'une autre phrase bien longue')).rejects.toBeInstanceOf(WrongPassphraseError)
+    expect(s.vault.locked).toEqual([])
+    expect(keyPaths(collectSecrets(s))).toEqual([])
   })
 })

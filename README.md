@@ -211,9 +211,20 @@ cette phrase.
 2. Le fichier **`vault.json`** est téléchargé. Publie-le avec le site : ouvre
    [le dossier `public` du dépôt sur GitHub](https://github.com/yann-IA/Avatar3D/upload/main/public),
    glisse le fichier dans la page, puis **Commit changes**. Le site est mis à jour en une à deux minutes.
-3. **Sur l'autre appareil**, ouvre l'application : elle propose aussitôt le coffre. Tape la phrase secrète,
-   c'est prêt. Si tu crées plus tard un nouveau coffre (nouvelle clé), il est proposé à nouveau sur les
-   appareils déjà configurés.
+3. **Sur l'autre appareil**, ouvre l'application : elle propose aussitôt le coffre. Tape la phrase secrète
+   puis **Entrée** (ou « Déverrouiller »), c'est prêt. Si tu crées plus tard un nouveau coffre (nouvelle clé),
+   il est proposé à nouveau sur les appareils déjà configurés.
+
+**Indicateurs.** En haut de l'écran, la pastille verte **🔐 Clés chargées** confirme que les clés du coffre sont
+sur l'appareil (une pastille orange **🔒 Coffre verrouillé** signifie qu'il reste à taper la phrase secrète ; un
+clic dessus ouvre la fenêtre). ⚙ → IA détaille les clés chargées.
+
+**Clés masquées.** Les clés chargées depuis le coffre ne sont jamais affichées dans les réglages (IA, Voix,
+Écoute) : à leur place, « 🔐 Chargée depuis le coffre ». Personne ne peut donc les lire ni les recopier.
+« Remplacer » efface une clé pour en saisir une autre à la main.
+
+**Désactiver le coffre.** ⚙ → IA → **Désactiver le coffre** efface de l'appareil les clés qu'il avait chargées.
+Ta phrase secrète permet de les recharger à tout moment.
 
 Sans publier le fichier, tu peux aussi le copier sur l'appareil et utiliser **⚙ → IA → Importer un fichier de
 coffre**.

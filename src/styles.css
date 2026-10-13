@@ -372,3 +372,35 @@ body:has(#panel:not([hidden])) .toast { top: auto; bottom: calc(env(safe-area-in
 .dialog-error { color: var(--danger); min-height: 1.2em; }
 .dialog-error:empty { display: none; }
 .dialog-actions { justify-content: flex-end; }
+
+/* ---------- indicateur du coffre à clés ---------- */
+.keys-badge {
+  padding: 4px 10px;
+  border-radius: 99px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.keys-badge.on { color: #0c2a20; background: var(--listen); }
+.keys-badge.off { color: var(--think); background: rgba(255, 198, 92, 0.12); border-color: rgba(255, 198, 92, 0.5); }
+@media (max-width: 400px) { .keys-badge .label { display: none; } }
+.vault-status {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+.vault-status small { display: block; opacity: 0.8; font-size: 0.8rem; }
+.vault-status.on { background: rgba(79, 209, 165, 0.15); border: 1px solid rgba(79, 209, 165, 0.6); color: var(--listen); }
+.vault-status.off { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); color: var(--muted); }
+.locked-key {
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px dashed rgba(79, 209, 165, 0.6);
+  background: rgba(79, 209, 165, 0.08);
+  color: var(--listen);
+  user-select: none;
+  -webkit-user-select: none;
+}

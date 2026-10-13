@@ -222,6 +222,11 @@ export interface Settings {
     applied: string
     /** Coffre pour lequel l'utilisateur a répondu « Plus tard ». */
     dismissed: string
+    /**
+     * Clés chargées depuis le coffre (chemins des réglages, ex. « tts.openai.apiKey ») : elles ne
+     * sont jamais affichées, pour qu'on ne puisse pas les recopier sur l'appareil.
+     */
+    locked: string[]
   }
 
   memory: {
@@ -306,7 +311,7 @@ export function defaultSettings(): Settings {
       silenceMs: 900,
     },
     avatar: { current: SAMPLE_AVATAR.id, list: [...BUILTIN_AVATARS], framing: 'bust', followPointer: true },
-    vault: { applied: '', dismissed: '' },
+    vault: { applied: '', dismissed: '', locked: [] },
     memory: { enabled: true },
     profiles: {},
     gestures: { enabled: true, list: [...BUILTIN_ANIMATIONS] },

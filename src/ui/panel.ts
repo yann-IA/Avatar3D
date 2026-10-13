@@ -20,6 +20,8 @@ export interface PanelActions {
   vaultCreate(): void
   vaultLoad(): void
   vaultImport(file: File): void
+  vaultForget(): void
+  vaultRelease(path: string): void
   memory(): MemoryManager
   memoryAdd(text: string): void
   memoryRemove(id: string): void
@@ -55,12 +57,22 @@ const text = (label: string, path: string, opts: { type?: string; placeholder?: 
  * les autres champs de clé (IA, Voix, Écoute), écrasant les bonnes valeurs. La clé reste
  * masquée à l'écran (CSS) et un bouton permet de l'afficher.
  */
-const secret = (label: string, path: string, placeholder = '') =>
-  `<div class="field"><span>${label} <small class="saved" data-saved="${path}"></small></span>
+const secret = (s: Settings, label: string, path: string, placeholder = '') =>
+  s.vault.locked.includes(path) && getPath(s, path)
+    ? lockedKey(label, path)
+    : `<div class="field"><span>${label} <small class="saved" data-saved="${path}"></small></span>
     <div class="row"><input type="text" class="grow secret" data-path="${path}" data-trim
       placeholder="${esc(placeholder)}" autocomplete="off" spellcheck="false" autocapitalize="off" autocorrect="off"
       data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" aria-label="${esc(label)}">
     <button type="button" class="btn" data-reveal aria-label="Afficher ou masquer la clé" title="Afficher / masquer">👁</button></div></div>`
+/**
+ * Clé chargée depuis le coffre : elle n'est jamais mise dans la page (ni affichable, ni copiable).
+ * « Remplacer » l'efface pour en saisir une autre à la main.
+ */
+const lockedKey = (label: string, path: string) =>
+  `<div class="field"><span>${label}</span>
+    <div class="row"><div class="grow locked-key" aria-label="${esc(label)} : chargée depuis le coffre, masquée">🔐 Chargée depuis le coffre</div>
+    <button type="button" class="btn" data-action="vault-release" data-key="${path}" title="Effacer cette clé pour en saisir une autre">Remplacer</button></div></div>`
 const range = (label: string, path: string, min: number, max: number, step: number) =>
   `<label class="field"><span>${label} : <output data-out="${path}"></output></span>
     <input type="range" data-path="${path}" min="${min}" max="${max}" step="${step}"></label>`
@@ -71,6 +83,17 @@ const select = (label: string, path: string, options: [string, string][]) =>
     .map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`)
     .join('')}</select></label>`
 const hint = (html: string) => `<p class="hint">${html}</p>`
+
+/** Indicateur d'état du coffre : clés chargées ou non sur cet appareil. */
+const KEY_NAMES: Record<string, string> = { 'tts.openai.apiKey': 'Voix OpenAI', 'tts.elevenlabs.apiKey': 'Voix ElevenLabs', 'stt.whisper.apiKey': 'Écoute Whisper' }
+function vaultStatus(s: Settings): string {
+  const loaded = s.vault.locked.filter((p) => getPath(s, p))
+  if (!loaded.length) return `<div class="vault-status off">🔓 Aucune clé chargée depuis le coffre sur cet appareil.</div>`
+  const names = loaded.map((p) => KEY_NAMES[p] ?? `IA ${PROVIDERS[p.split('.')[1] as ProviderId]?.label ?? p}`)
+  const when = s.vault.applied ? ` le ${new Date(s.vault.applied).toLocaleString('fr', { dateStyle: 'short', timeStyle: 'short' })}` : ''
+  return `<div class="vault-status on" role="status">✅ Coffre actif : ${loaded.length} clé${loaded.length > 1 ? 's' : ''} chargée${loaded.length > 1 ? 's' : ''}
+    <small>${esc(names.join(' · '))} — coffre créé${when}</small></div>`
+}
 
 const LANGUAGES: [string, string][] = [
   ['fr-FR', 'Français'],
@@ -182,7 +205,7 @@ export class SettingsPanel {
         return [
           select('Fournisseur', 'activeProvider', (Object.keys(PROVIDERS) as ProviderId[]).map((k) => [k, PROVIDERS[k].label])),
           preset.needsKey || s.providers[id].apiKey
-            ? secret('Clé API', `${p}.apiKey`, 'sk-…') +
+            ? secret(s, 'Clé API', `${p}.apiKey`, 'sk-…') +
               (preset.keyUrl ? hint(`Obtenir une clé : <a href="${preset.keyUrl}" target="_blank" rel="noopener">${preset.keyUrl}</a>`) : '')
             : hint('Aucune clé nécessaire pour un serveur local.'),
           `<div class="row"><div class="grow">${text('Modèle', `${p}.model`, { list: 'model-list' })}</div>
@@ -213,14 +236,15 @@ export class SettingsPanel {
                 'Les clés sont enregistrées uniquement dans ce navigateur. Le relais local n’existe qu’avec <code>npm run dev</code> ou <code>npm run preview</code> : active-le si un fournisseur refuse les appels directs depuis le navigateur. Pour Ollama sans relais, lance-le avec <code>OLLAMA_ORIGINS=*</code>.',
               ),
           `<h3>🔐 Coffre à clés</h3>`,
+          vaultStatus(s),
           hint(
-            'Chiffre tes clés avec une phrase secrète pour les retrouver sur un autre appareil (le casque par exemple) en tapant seulement cette phrase. ' +
-              (s.vault.applied ? `Dernier coffre utilisé ici : ${new Date(s.vault.applied).toLocaleString('fr')}.` : ''),
+            'Chiffre tes clés avec une phrase secrète pour les retrouver sur un autre appareil (ton téléphone par exemple) en tapant seulement cette phrase. Les clés chargées depuis le coffre restent masquées : personne ne peut les afficher ni les recopier.',
           ),
           `<div class="row" style="flex-wrap:wrap">
              <button class="btn" data-action="vault-create">Créer un coffre…</button>
-             <button class="btn" data-action="vault-load">Charger le coffre du site</button>
+             <button class="btn" data-action="vault-load">${s.vault.locked.length ? 'Recharger le coffre' : 'Charger le coffre'}</button>
              <label class="btn">Importer un fichier de coffre<input id="vault-file" type="file" accept=".json,application/json" hidden></label>
+             ${s.vault.locked.length ? '<button class="btn danger" data-action="vault-forget">Désactiver le coffre</button>' : ''}
            </div>`,
           `<button class="btn danger" data-action="clear">Effacer la conversation</button>`,
         ].join('')
@@ -270,7 +294,7 @@ export class SettingsPanel {
         if (s.tts.engine === 'openai') {
           return [
             engine,
-            secret('Clé API (voix)', 'tts.openai.apiKey', 'sk-…'),
+            secret(s, 'Clé API (voix)', 'tts.openai.apiKey', 'sk-…'),
             text('Adresse de l’API', 'tts.openai.baseUrl', { type: 'url' }),
             text('Modèle', 'tts.openai.model', { list: 'tts-models' }),
             `<datalist id="tts-models"><option value="gpt-4o-mini-tts"><option value="tts-1"><option value="tts-1-hd"><option value="kokoro"></datalist>`,
@@ -285,7 +309,7 @@ export class SettingsPanel {
         if (s.tts.engine === 'elevenlabs') {
           return [
             engine,
-            secret('Clé API ElevenLabs', 'tts.elevenlabs.apiKey'),
+            secret(s, 'Clé API ElevenLabs', 'tts.elevenlabs.apiKey'),
             `<div class="row"><div class="grow">${text('Voix (identifiant)', 'tts.elevenlabs.voiceId', { list: 'eleven-voices' })}</div>
               <button class="btn" data-action="eleven-voices" style="align-self:flex-end">Lister</button></div>
               <datalist id="eleven-voices"></datalist>`,
@@ -317,7 +341,7 @@ export class SettingsPanel {
               )
             : [
                 text('Adresse de l’API', 'stt.whisper.baseUrl', { type: 'url' }),
-                secret('Clé API (écoute)', 'stt.whisper.apiKey'),
+                secret(s, 'Clé API (écoute)', 'stt.whisper.apiKey'),
                 text('Modèle', 'stt.whisper.model', { list: 'stt-models' }),
                 `<datalist id="stt-models"><option value="whisper-1"><option value="gpt-4o-mini-transcribe"><option value="whisper-large-v3-turbo"></datalist>`,
                 range('Silence de fin de phrase (ms)', 'stt.silenceMs', 400, 2500, 100),
@@ -423,6 +447,10 @@ export class SettingsPanel {
     }
   }
 
+  focusField(path: string): void {
+    this.body.querySelector<HTMLInputElement>(`[data-path="${path}"]`)?.focus()
+  }
+
   /** Petit « ✓ enregistrée » à côté d'une clé, pour confirmer qu'elle est bien sauvegardée. */
   private flashSaved(path: string): void {
     const badge = this.body.querySelector<HTMLElement>(`[data-saved="${path}"]`)
@@ -478,6 +506,8 @@ export class SettingsPanel {
     on('reset-persona', () => this.actions.resetPersona())
     on('vault-create', () => this.actions.vaultCreate())
     on('vault-load', () => this.actions.vaultLoad())
+    on('vault-forget', () => this.actions.vaultForget())
+    on('vault-release', (el) => this.actions.vaultRelease(el.dataset.key!))
     this.body.querySelector<HTMLInputElement>('#vault-file')?.addEventListener('change', (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (file) this.actions.vaultImport(file)

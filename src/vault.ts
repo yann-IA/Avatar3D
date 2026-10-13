@@ -1,4 +1,4 @@
-import { PROVIDERS, type ProviderConfig, type ProviderId, type Settings, type STTEngineId, type TTSEngineId } from './settings'
+import { PROVIDERS, getPath, saveSettings, setPath, type ProviderConfig, type ProviderId, type Settings, type STTEngineId, type TTSEngineId } from './settings'
 
 /**
  * Coffre à clés : les clés API (et la configuration qui va avec) chiffrées par une phrase
@@ -91,6 +91,59 @@ export function applySecrets(s: Settings, v: VaultSecrets): void {
   if (v.stt?.whisper) Object.assign(s.stt.whisper, clean(v.stt.whisper))
 }
 
+/** Chemins des réglages qui reçoivent une clé du coffre (ex. « providers.openai.apiKey »). */
+export function keyPaths(v: VaultSecrets): string[] {
+  return [
+    ...(Object.entries(v.providers) as [ProviderId, Partial<ProviderConfig> | undefined][])
+      .filter(([id, p]) => id in PROVIDERS && typeof p?.apiKey === 'string' && p.apiKey.trim())
+      .map(([id]) => `providers.${id}.apiKey`),
+    ...(v.tts?.openai?.apiKey?.trim() ? ['tts.openai.apiKey'] : []),
+    ...(v.tts?.elevenlabs?.apiKey?.trim() ? ['tts.elevenlabs.apiKey'] : []),
+    ...(v.stt?.whisper?.apiKey?.trim() ? ['stt.whisper.apiKey'] : []),
+  ]
+}
+
+/**
+ * Déchiffre le coffre et charge ses clés sur cet appareil. Les clés chargées sont marquées
+ * « verrouillées » : l'interface ne les affiche plus. Renvoie le nombre de clés chargées.
+ */
+export async function unlockVault(s: Settings, file: VaultFile, passphrase: string): Promise<number> {
+  const secrets = await decryptVault(file, passphrase)
+  applySecrets(s, secrets)
+  const paths = keyPaths(secrets)
+  s.vault.locked = [...new Set([...s.vault.locked, ...paths])]
+  s.vault.applied = file.created
+  saveSettings(s)
+  rememberVault(file)
+  return paths.length
+}
+
+/** Désactive le coffre : efface de cet appareil les clés qu'il avait chargées. */
+export function forgetVaultKeys(s: Settings): number {
+  const n = s.vault.locked.length
+  for (const path of s.vault.locked) setPath(s, path, '')
+  s.vault.locked = []
+  s.vault.applied = ''
+  saveSettings(s)
+  return n
+}
+
+/** Libère une seule clé du coffre (effacée) pour pouvoir en saisir une autre à la main. */
+export function releaseKey(s: Settings, path: string): void {
+  if (!s.vault.locked.includes(path)) return
+  setPath(s, path, '')
+  s.vault.locked = s.vault.locked.filter((p) => p !== path)
+  saveSettings(s)
+}
+
+/** Nombre de clés du coffre réellement présentes sur cet appareil. */
+export function loadedVaultKeys(s: Settings): number {
+  return s.vault.locked.filter((p) => {
+    const v = getPath(s, p)
+    return typeof v === 'string' && v !== ''
+  }).length
+}
+
 /** Ne garde que les chaînes (un fichier modifié à la main ne doit pas casser les réglages). */
 function clean<T extends object>(o: T): Partial<T> {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => typeof v === 'string').map(([k, v]) => [k, (v as string).trim()])) as Partial<T>
@@ -151,6 +204,38 @@ export function parseVault(text: string): VaultFile | null {
   } catch {
     return null
   }
+}
+
+/* ------------------------------- Fichier du coffre ------------------------------- */
+
+const FILE_KEY = 'companion.vaultfile.v1'
+
+/**
+ * Garde une copie du fichier chiffré (sans la phrase secrète, il est illisible) pour pouvoir le
+ * déverrouiller plus tard, par exemple en réalité augmentée, même s'il avait été importé à la main.
+ */
+export function rememberVault(file: VaultFile): void {
+  try {
+    localStorage.setItem(FILE_KEY, JSON.stringify(file))
+  } catch {
+    /* stockage plein ou indisponible : le coffre du site reste utilisable */
+  }
+}
+
+export function rememberedVault(): VaultFile | null {
+  try {
+    return parseVault(localStorage.getItem(FILE_KEY) ?? '')
+  } catch {
+    return null
+  }
+}
+
+/** Coffre le plus récent disponible : celui du site, sinon le dernier importé sur cet appareil. */
+export async function availableVault(): Promise<VaultFile | null> {
+  const site = await fetchVault()
+  const local = rememberedVault()
+  if (site && local) return site.created >= local.created ? site : local
+  return site ?? local
 }
 
 /** Coffre publié avec le site, s'il existe. */
