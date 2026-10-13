@@ -25,22 +25,42 @@ export class OpenAICompatibleClient implements LLMClient {
 
   async streamChat({ system, messages, signal, onText }: ChatRequest): Promise<string> {
     if (!this.opts.model) throw new LLMError('Aucun modèle choisi dans les réglages.')
-    const res = await fetch(this.url('/chat/completions'), {
-      method: 'POST',
-      headers: this.headers(),
-      signal,
-      body: JSON.stringify({
-        model: this.opts.model,
-        stream: true,
-        temperature: this.opts.temperature,
-        max_tokens: this.opts.maxTokens,
-        messages: [{ role: 'system', content: system }, ...messages],
-      }),
-    })
-    if (!res.ok || !res.body) throw new LLMError(await describeError(res))
+    const key = `${this.opts.baseUrl}|${this.opts.model}`
+    const quirks = QUIRKS.get(key) ?? initialQuirks(this.opts.baseUrl, this.opts.model)
+    // Les paramètres acceptés varient selon les modèles : si le fournisseur en refuse un, on
+    // adapte la requête et on réessaie (et on s'en souvient pour les suivantes).
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetch(this.url('/chat/completions'), {
+        method: 'POST',
+        headers: this.headers(),
+        signal,
+        body: JSON.stringify(this.body(system, messages, quirks)),
+      })
+      if (res.ok && res.body) {
+        QUIRKS.set(key, quirks)
+        return quirks.noStream ? this.readFull(res, onText) : this.readStream(res.body, onText)
+      }
+      const error = await describeError(res)
+      if (res.status !== 400 || attempt >= 4 || !adapt(quirks, error)) throw new LLMError(error)
+    }
+  }
 
+  private body(system: string, messages: ChatRequest['messages'], q: Quirks): Record<string, unknown> {
+    return {
+      model: this.opts.model,
+      ...(q.noStream ? {} : { stream: true }),
+      ...(q.noTemperature ? {} : { temperature: this.opts.temperature }),
+      // Les modèles « qui réfléchissent » comptent leur réflexion dans la limite : on leur laisse de la marge.
+      ...(q.completionTokens ? { max_completion_tokens: this.opts.maxTokens + (q.reasoning ? 4000 : 0) } : { max_tokens: this.opts.maxTokens }),
+      // Réflexion courte : pour une conversation orale, la rapidité de réponse compte plus.
+      ...(q.reasoning && !q.noReasoningEffort ? { reasoning_effort: 'low' } : {}),
+      messages: [{ role: 'system', content: system }, ...messages],
+    }
+  }
+
+  private async readStream(body: ReadableStream<Uint8Array>, onText: (t: string) => void): Promise<string> {
     let full = ''
-    for await (const data of readSSE(res.body)) {
+    for await (const data of readSSE(body)) {
       if (data === '[DONE]') break
       let json: { choices?: { delta?: { content?: string } }[]; error?: { message?: string } }
       try {
@@ -58,12 +78,59 @@ export class OpenAICompatibleClient implements LLMClient {
     return full
   }
 
+  /** Réponse d'un bloc (fournisseur ou modèle qui refuse le streaming). */
+  private async readFull(res: Response, onText: (t: string) => void): Promise<string> {
+    const json = (await res.json()) as { choices?: { message?: { content?: string } }[] }
+    const text = json.choices?.[0]?.message?.content ?? ''
+    if (text) onText(text)
+    return text
+  }
+
   async listModels(): Promise<string[]> {
     const res = await fetch(this.url('/models'), { headers: this.headers() })
     if (!res.ok) throw new LLMError(await describeError(res))
     const json = (await res.json()) as { data?: { id: string }[]; models?: { name: string }[] }
     const ids = json.data?.map((m) => m.id) ?? json.models?.map((m) => m.name) ?? []
     return ids.sort()
+  }
+}
+
+/* ------------------- Paramètres acceptés selon le modèle ------------------- */
+
+export interface Quirks {
+  /** `max_completion_tokens` au lieu de `max_tokens` (modèles récents d'OpenAI). */
+  completionTokens: boolean
+  /** Modèle qui « réfléchit » (o1, o3, o4, gpt-5…) : température imposée, réflexion à doser. */
+  reasoning: boolean
+  noTemperature: boolean
+  noReasoningEffort: boolean
+  noStream: boolean
+}
+
+const QUIRKS = new Map<string, Quirks>()
+
+export function initialQuirks(baseUrl: string, model: string): Quirks {
+  const openai = /(^|\.)openai\.com/.test(hostOf(baseUrl))
+  const reasoning = openai && /^(o\d|gpt-5)/i.test(model.replace(/^openai\//, ''))
+  return { completionTokens: openai, reasoning, noTemperature: reasoning, noReasoningEffort: false, noStream: false }
+}
+
+/** Adapte la requête d'après le message d'erreur du fournisseur. Renvoie false si rien à changer. */
+export function adapt(q: Quirks, error: string): boolean {
+  const e = error.toLowerCase()
+  if (e.includes('max_tokens') && !q.completionTokens) return (q.completionTokens = true)
+  if (e.includes('max_completion_tokens') && q.completionTokens) return !(q.completionTokens = false)
+  if (e.includes('temperature') && !q.noTemperature) return (q.noTemperature = true)
+  if (e.includes('reasoning_effort') && q.reasoning && !q.noReasoningEffort) return (q.noReasoningEffort = true)
+  if (e.includes('stream') && !q.noStream) return (q.noStream = true)
+  return false
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return ''
   }
 }
 
