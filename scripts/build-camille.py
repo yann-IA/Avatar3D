@@ -8,8 +8,8 @@ Camille : femme d'une trentaine d'années, brune, habillée en blanc (chemise à
 pantalon), avec une chasuble rouge de la CGT : grand logo dans le dos, petit logo à droite sur le
 devant (vu de face). Logo fourni : scripts/assets/cgt-logo.jpg.
 
-- cheveux bruns coupés aux épaules (le relief des mèches est conservé ; le grand logo du dos reste
-  visible), sourcils bruns ;
+- cheveux bruns coupés au-dessus des épaules (le relief des mèches est conservé ; le logo du dos,
+  entre les omoplates, reste visible), sourcils bruns ;
 - chemise blanche : col, patte de boutonnage, boutons, manches longues avec revers ;
 - chasuble rouge sans manches par-dessus (encolure en V devant, ronde derrière, emmanchures),
   peinte d'après la position de chaque point du vêtement, avec un biais plus foncé sur les bords ;
@@ -151,8 +151,8 @@ def main():
     dark = luminance(img) < 0.7
     a[dark] = a[dark] * 0.3 + np.array([52, 34, 24], np.float32) * 0.7
     glb.set_image(i, Image.fromarray(a.astype(np.uint8)))
-    # coupe mi-longue (aux épaules) : le grand logo du dos reste visible
-    shorten_hair(glb, cut=1.3, keep=0.45)
+    # coupe au-dessus des épaules : le logo du dos, entre les omoplates, reste visible
+    shorten_hair(glb, cut=1.32, keep=0.3)
     for m in j['materials']:
         if m['name'].endswith('_HAIR'):
             mt = m['extensions']['VRMC_materials_mtoon']
@@ -171,11 +171,11 @@ def main():
     full, badge = logo_images()
     shoulder_x = abs(wp[hb['leftUpperArm']][0])
     # petit logo à droite vu de face, sur la chasuble
-    bw = 0.075
-    top = project_decal(top, tops, shoulder_x * 0.64, neck_front - 0.115, bw, bw * badge.shape[0] / badge.shape[1], badge, soft=0.8)
-    # grand logo dans le dos, sous les cheveux
-    fw = 0.27
-    top = project_decal(top, tops, 0.0, hem_y + 0.21, fw, fw * full.shape[0] / full.shape[1], full, n=32, soft=0.8, back=True)
+    bw = 0.055
+    top = project_decal(top, tops, shoulder_x * 0.66, neck_front - 0.105, bw, bw * badge.shape[0] / badge.shape[1], badge, soft=0.8)
+    # logo du dos, entre les omoplates
+    fw = 0.19
+    top = project_decal(top, tops, 0.0, neck_front - 0.09, fw, fw * full.shape[0] / full.shape[1], full, n=32, soft=0.8, back=True)
     glb.set_image(i_top, top)
     for m in j['materials']:
         if m['name'] == 'Tops_01_CLOTH':

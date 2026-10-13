@@ -136,9 +136,9 @@ chemise noire à manches longues avec le logo Orange, pantalon noir. Elle est g�
 `python3 scripts/build-claire.py`) ; la taille et le côté du logo se règlent en tête du script. Le logo Orange
 est une marque d'Orange : vérifie que son usage est autorisé dans ton contexte avant de diffuser l'avatar.
 
-Camille est faite de la même façon par `scripts/build-camille.py` : cheveux bruns coupés aux épaules, chemise et
-pantalon blancs, chasuble rouge avec le logo CGT FAPT (fourni dans `scripts/assets/cgt-logo.jpg`) en grand dans le
-dos et en petit à droite sur le devant. Les outils communs aux deux scripts sont dans `scripts/vroid_kit.py`.
+Camille est faite de la même façon par `scripts/build-camille.py` : cheveux bruns coupés au-dessus des épaules,
+chemise et pantalon blancs, chasuble rouge avec le logo CGT FAPT (fourni dans `scripts/assets/cgt-logo.jpg`) dans
+le dos entre les omoplates et en petit à droite sur le devant. Les outils communs aux deux scripts sont dans `scripts/vroid_kit.py`.
 
 Pour ajouter tes propres avatars : « Importer un fichier .vrm » (il est conservé dans le navigateur), ou colle
 une URL. Un avatar importé reprend le personnage actuel, que tu peux ensuite modifier : il le gardera.
