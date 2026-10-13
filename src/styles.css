@@ -448,4 +448,4 @@ body:has(#panel:not([hidden])) .toast { top: auto; bottom: calc(env(safe-area-in
 .picker-list button[hidden] { display: none; }
 .picker-list button:hover, .picker-list button:focus-visible { background: rgba(255, 255, 255, 0.08); }
 .picker-list button.current { background: rgba(143, 123, 255, 0.25); }
-.picker-list small { display: block; opacity: 0.6; font-size: 0.75rem; }
+.picker-list small { display: block; opacity: 0.6; font-size: 0.75rem; }.vault-status.ready { background: rgba(255, 198, 92, 0.12); border: 1px solid rgba(255, 198, 92, 0.5); color: var(--think); }

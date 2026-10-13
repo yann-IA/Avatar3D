@@ -275,6 +275,7 @@ $('keys-badge').addEventListener('click', () => {
 async function offerVault(): Promise<boolean> {
   const file = (knownVault = await availableVault())
   updateKeysIndicator()
+  panel.refresh('ia')
   if (!file || file.created === settings.vault.applied) return false
   // Appareil sans clé : on propose toujours le coffre (« Plus tard » ne vaut que pour cette fois).
   if (needsSetup()) {
@@ -388,8 +389,14 @@ const panel = new SettingsPanel(settings, {
   async vaultLoad() {
     const file = (knownVault = await availableVault())
     if (file) vault.unlock(file, { remindLater: false })
-    else toast(`Aucun coffre n’est publié avec le site pour l’instant. Crée-le, puis dépose vault.json dans le dossier public du dépôt.`, 'info', 7000)
+    else
+      toast(
+        `Aucun coffre trouvé à l’adresse ${new URL('vault.json', location.href).href}. Vérifie que vault.json est bien dans le dossier « public » du dépôt de CE site, puis attends 1 à 2 minutes la mise en ligne.`,
+        'info',
+        12000,
+      )
   },
+  vaultAvailable: () => knownVault?.created ?? null,
   vaultForget() {
     if (!confirm('Désactiver le coffre ? Les clés qu’il a chargées seront effacées de cet appareil. Ta phrase secrète permettra de les recharger.')) return
     const n = forgetVaultKeys(settings)

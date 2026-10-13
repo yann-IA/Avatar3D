@@ -20,6 +20,8 @@ export interface PanelActions {
   vaultCreate(): void
   vaultLoad(): void
   vaultImport(file: File): void
+  /** Coffre trouvé (site ou fichier importé) : date de création, ou null s'il n'y en a pas. */
+  vaultAvailable(): string | null
   vaultForget(): void
   vaultRelease(path: string): void
   memory(): MemoryManager
@@ -99,9 +101,16 @@ const hint = (html: string) => `<p class="hint">${html}</p>`
 
 /** Indicateur d'état du coffre : clés chargées ou non sur cet appareil. */
 const KEY_NAMES: Record<string, string> = { 'tts.openai.apiKey': 'Voix OpenAI', 'tts.elevenlabs.apiKey': 'Voix ElevenLabs', 'stt.whisper.apiKey': 'Écoute Whisper' }
-function vaultStatus(s: Settings): string {
+function vaultStatus(s: Settings, available: string | null): string {
   const loaded = s.vault.locked.filter((p) => getPath(s, p))
-  if (!loaded.length) return `<div class="vault-status off">🔓 Aucune clé chargée depuis le coffre sur cet appareil.</div>`
+  if (!loaded.length) {
+    const site = new URL('vault.json', location.href).href
+    return available
+      ? `<div class="vault-status ready">🔒 Coffre trouvé (créé le ${new Date(available).toLocaleString('fr', { dateStyle: 'short', timeStyle: 'short' })}), pas encore déverrouillé sur cet appareil.
+          <small>Clique sur « Charger le coffre » et tape ta phrase secrète.</small></div>`
+      : `<div class="vault-status off">Aucun coffre trouvé pour ce site.
+          <small>Adresse vérifiée : ${esc(site)}</small></div>`
+  }
   const names = loaded.map((p) => KEY_NAMES[p] ?? `IA ${PROVIDERS[p.split('.')[1] as ProviderId]?.label ?? p}`)
   const when = s.vault.applied ? ` le ${new Date(s.vault.applied).toLocaleString('fr', { dateStyle: 'short', timeStyle: 'short' })}` : ''
   return `<div class="vault-status on" role="status">✅ Coffre actif : ${loaded.length} clé${loaded.length > 1 ? 's' : ''} chargée${loaded.length > 1 ? 's' : ''}
@@ -247,7 +256,7 @@ export class SettingsPanel {
                 'Les clés sont enregistrées uniquement dans ce navigateur. Le relais local n’existe qu’avec <code>npm run dev</code> ou <code>npm run preview</code> : active-le si un fournisseur refuse les appels directs depuis le navigateur. Pour Ollama sans relais, lance-le avec <code>OLLAMA_ORIGINS=*</code>.',
               ),
           `<h3>🔐 Coffre à clés</h3>`,
-          vaultStatus(s),
+          vaultStatus(s, this.actions.vaultAvailable()),
           hint(
             'Chiffre tes clés avec une phrase secrète pour les retrouver sur un autre appareil (ton téléphone par exemple) en tapant seulement cette phrase. Les clés chargées depuis le coffre restent masquées : personne ne peut les afficher ni les recopier.',
           ),
