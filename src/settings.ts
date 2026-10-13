@@ -266,6 +266,8 @@ export const BUILTIN_AVATARS: AvatarEntry[] = [
   { id: 'dino', name: 'Dino (dinosaure)', url: 'avatars/dino.vrm', builtin: true },
   // Adaptation du modèle de pixiv (voir scripts/build-claire.py).
   { id: 'claire', name: 'Claire (femme, chemise Orange)', url: 'avatars/claire.vrm', builtin: true },
+  // Adaptation du modèle de pixiv (voir scripts/build-camille.py).
+  { id: 'camille', name: 'Camille (femme, chasuble CGT)', url: 'avatars/camille.vrm', builtin: true },
 ]
 
 export const DEFAULT_PROMPT = `Tu es une compagne virtuelle chaleureuse, curieuse et pleine d'humour.

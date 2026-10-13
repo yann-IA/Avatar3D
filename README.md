@@ -108,7 +108,7 @@ chromium-browser --kiosk --autoplay-policy=no-user-gesture-required http://local
 
 ## Changer d'avatar
 
-Cinq avatars sont fournis, à choisir dans **⚙ → Avatar** :
+Six avatars sont fournis, à choisir dans **⚙ → Avatar** :
 
 | Avatar | Personnage par défaut | Voix par défaut |
 |---|---|---|
@@ -117,6 +117,7 @@ Cinq avatars sont fournis, à choisir dans **⚙ → Avatar** :
 | Bip (petit robot à écran, antenne qui ballotte) | **Bip**, robot curieux qui découvre le monde des humains | aiguë et rythmée, « petit robot » (OpenAI : `alloy`) |
 | Dino (dinosaure tout rond, queue qui remue) | **Dino**, petit dinosaure joyeux et gourmand | enfantine et pétillante (OpenAI : `fable`) |
 | Claire (femme blonde d'environ 1,70 m, chemise noire au logo Orange, pantalon noir) | **Claire**, la trentaine, dynamique et chaleureuse | féminine, claire et posée (OpenAI : `coral`) |
+| Camille (femme brune, tenue blanche, chasuble rouge CGT) | **Camille**, militante, spécialiste de tout ce qui concerne la CGT | féminine, chaleureuse et convaincue (OpenAI : `shimmer`) |
 
 **Chaque avatar a son propre personnage** : nom, personnalité, voix et ton. Quand tu changes d'avatar,
 l'application mémorise ce que tu avais réglé pour le précédent et charge le personnage du nouveau. Tes retouches
@@ -134,6 +135,10 @@ redistribution, y compris commerciale) : silhouette adulte (environ 1,70 m), che
 chemise noire à manches longues avec le logo Orange, pantalon noir. Elle est générée par `scripts/build-claire.py` (Python 3 avec numpy et Pillow :
 `python3 scripts/build-claire.py`) ; la taille et le côté du logo se règlent en tête du script. Le logo Orange
 est une marque d'Orange : vérifie que son usage est autorisé dans ton contexte avant de diffuser l'avatar.
+
+Camille est faite de la même façon par `scripts/build-camille.py` : cheveux bruns coupés aux épaules, chemise et
+pantalon blancs, chasuble rouge avec le logo CGT FAPT (fourni dans `scripts/assets/cgt-logo.jpg`) en grand dans le
+dos et en petit à droite sur le devant. Les outils communs aux deux scripts sont dans `scripts/vroid_kit.py`.
 
 Pour ajouter tes propres avatars : « Importer un fichier .vrm » (il est conservé dans le navigateur), ou colle
 une URL. Un avatar importé reprend le personnage actuel, que tu peux ensuite modifier : il le gardera.
