@@ -80,6 +80,9 @@ auto-signé), puis « Ajouter à l'écran d'accueil » pour l'installer comme un
 Pour un usage permanent, publie le dossier `dist/` (créé par `npm run build`) sur un hébergeur HTTPS statique
 (GitHub Pages, Netlify, Cloudflare Pages…). Comme tout se passe dans le navigateur, aucun serveur n'est nécessaire.
 
+Pour ne pas retaper tes clés API sur le téléphone, utilise le
+[coffre à clés](#coffre-à-clés-saisir-ses-clés-une-seule-fois).
+
 ## Sur un Raspberry Pi ou un mini-PC
 
 Un Raspberry Pi 4 ou 5 suffit : le rendu 3D se fait sur la puce graphique et l'IA tourne dans le cloud (ou sur
@@ -196,6 +199,31 @@ de l'un à l'autre à tout moment. La personnalité se règle dans **⚙ → Per
   navigateur. Coche **« Passer par le relais local »** : les appels passent alors par le serveur
   `npm run dev` / `npm run preview`.
 
+## Coffre à clés (saisir ses clés une seule fois)
+
+Taper de longues clés API sur un téléphone est pénible. Le coffre à clés règle ça : tu saisis tes clés une fois
+sur le PC, tu les chiffres avec une **phrase secrète**, et sur les autres appareils tu n'as plus qu'à taper
+cette phrase.
+
+1. **Sur le PC**, renseigne tes clés (⚙ → IA, Voix, Écoute) puis va dans **⚙ → IA → 🔐 Coffre à clés →
+   Créer un coffre…**. Choisis une phrase d'au moins 16 caractères, idéalement 4 ou 5 mots tirés au hasard
+   (« girafe lampe violon nuage »), et note-la : elle ne peut pas être retrouvée.
+2. Le fichier **`vault.json`** est téléchargé. Publie-le avec le site : ouvre
+   [le dossier `public` du dépôt sur GitHub](https://github.com/yann-IA/Avatar3D/upload/main/public),
+   glisse le fichier dans la page, puis **Commit changes**. Le site est mis à jour en une à deux minutes.
+3. **Sur l'autre appareil**, ouvre l'application : elle propose aussitôt le coffre. Tape la phrase secrète,
+   c'est prêt. Si tu crées plus tard un nouveau coffre (nouvelle clé), il est proposé à nouveau sur les
+   appareils déjà configurés.
+
+Sans publier le fichier, tu peux aussi le copier sur l'appareil et utiliser **⚙ → IA → Importer un fichier de
+coffre**.
+
+Le coffre contient les clés et les réglages de connexion (fournisseur, modèle, adresse, moteurs de voix et
+d'écoute), pas les personnages ni les souvenirs. Il est chiffré en AES-256-GCM avec une clé dérivée de la phrase
+secrète (PBKDF2-SHA256, 600 000 itérations, sel aléatoire) : sans la phrase, le fichier est illisible, et une
+mauvaise phrase est détectée. Comme il est public, sa sécurité repose entièrement sur la phrase secrète :
+choisis-la longue et unique, et fixe une limite de dépenses chez tes fournisseurs.
+
 ## Comment ça marche
 
 ```
@@ -220,6 +248,7 @@ src/
 ├── main.ts                 assemblage de l'interface
 ├── settings.ts             réglages, fournisseurs, sauvegarde locale
 ├── profiles.ts             personnage (nom, personnalité, voix) propre à chaque avatar
+├── vault.ts                coffre à clés : chiffrement des clés API par une phrase secrète
 ├── avatar/
 │   ├── stage.ts            scène three.js + VRM : pose, respiration, clignements, regard, émotions
 │   ├── gestures.ts         lecture des animations VRMA, mélangées à l'animation procédurale
@@ -233,7 +262,7 @@ src/
 ├── llm/                    clients IA (compatible OpenAI, Anthropic)
 ├── tts/                    moteurs de voix et file de lecture
 ├── stt/                    reconnaissance vocale (navigateur, Whisper + détection de silence)
-└── ui/panel.ts             panneau de réglages
+└── ui/                     panneau de réglages, fenêtres du coffre à clés
 ```
 
 Commandes : `npm run dev` (développement), `npm run build` (version optimisée dans `dist/`),
@@ -245,6 +274,8 @@ Pour déboguer, ajoute `?debug` à l'URL : l'objet `stage` est alors accessible 
 
 - Les clés API sont enregistrées dans le `localStorage` du navigateur, en clair. N'utilise pas l'application
   sur un appareil partagé avec des clés à gros budget, et fixe une limite de dépenses chez ton fournisseur.
+- Le coffre à clés publié (`vault.json`) est lisible par tous, mais chiffré : seule ta phrase secrète le protège.
+  Si tu penses qu'elle a fuité, révoque les clés chez les fournisseurs et crée un nouveau coffre.
 - Le relais local (`/__proxy/`) relaie les requêtes vers n'importe quelle adresse. Avec `--host`, il est donc
   accessible depuis tout ton réseau local : ne l'expose pas sur Internet.
 

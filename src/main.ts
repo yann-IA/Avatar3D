@@ -3,6 +3,8 @@ import { AvatarStage } from './avatar/stage'
 import { Conversation } from './core/conversation'
 import { parseSegment, slugify } from './core/emotion'
 import { MemoryManager } from './core/memory'
+import { VaultDialog } from './ui/vaultDialog'
+import { fetchVault, parseVault } from './vault'
 import { DEFAULT_PROFILES, applyProfile, resetProfile, switchProfile } from './profiles'
 import { createLLM } from './llm'
 import { PROVIDERS, loadSettings, saveSettings, type AnimationEntry, type AvatarEntry } from './settings'
@@ -231,6 +233,24 @@ function personaChanged(): void {
   convo.reloadVoice()
 }
 
+/* ---------------------------- Coffre à clés ---------------------------- */
+
+const vault = new VaultDialog(settings, (keys) => {
+  convo.reloadVoice()
+  if (panel.isOpen) panel.render()
+  toast(`🔐 ${keys} clé${keys > 1 ? 's' : ''} chargée${keys > 1 ? 's' : ''} depuis le coffre.`, 'info', 4000)
+})
+
+/** Au démarrage : propose le coffre publié avec le site s'il est nouveau pour cet appareil. */
+async function offerVault(): Promise<boolean> {
+  const file = await fetchVault()
+  if (!file || file.created === settings.vault.applied || file.created === settings.vault.dismissed) return false
+  // Appareil pas encore configuré, ou coffre plus récent que celui déjà chargé ici.
+  if (!needsSetup() && !(settings.vault.applied && file.created > settings.vault.applied)) return false
+  vault.unlock(file)
+  return true
+}
+
 /* ------------------------------ Réglages ------------------------------ */
 
 const panel = new SettingsPanel(settings, {
@@ -325,6 +345,17 @@ const panel = new SettingsPanel(settings, {
     saveSettings(settings)
     panel.render()
   },
+  vaultCreate: () => vault.create(),
+  async vaultLoad() {
+    const file = await fetchVault()
+    if (file) vault.unlock(file, { remindLater: false })
+    else toast(`Aucun coffre n’est publié avec le site pour l’instant. Crée-le, puis dépose vault.json dans le dossier public du dépôt.`, 'info', 7000)
+  },
+  async vaultImport(f) {
+    const file = parseVault(await f.text())
+    if (file) vault.unlock(file, { remindLater: false })
+    else toast('Ce fichier n’est pas un coffre à clés.')
+  },
   resetPersona() {
     if (!resetProfile(settings)) return
     personaChanged()
@@ -385,9 +416,9 @@ void loadAvatar(settings.avatar.current).then(() => {
   for (const a of settings.gestures.list) if (a.builtin) void stage.gestures.load(a.url).catch(() => {})
 })
 
-if (needsSetup()) {
-  toast('Bienvenue ! Ouvre les réglages (⚙) pour choisir ton IA et sa voix.', 'info', 9000)
-}
+void offerVault().then((offered) => {
+  if (!offered && needsSetup()) toast('Bienvenue ! Ouvre les réglages (⚙) pour choisir ton IA et sa voix.', 'info', 9000)
+})
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => void navigator.serviceWorker.register('sw.js').catch(() => {}))

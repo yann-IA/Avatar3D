@@ -217,6 +217,13 @@ export interface Settings {
     followPointer: boolean
   }
 
+  vault: {
+    /** Date de création du dernier coffre à clés chargé (ou créé) sur cet appareil. */
+    applied: string
+    /** Coffre pour lequel l'utilisateur a répondu « Plus tard ». */
+    dismissed: string
+  }
+
   memory: {
     /** Mémoire à long terme : souvenirs extraits des conversations et rappelés au personnage. */
     enabled: boolean
@@ -299,6 +306,7 @@ export function defaultSettings(): Settings {
       silenceMs: 900,
     },
     avatar: { current: SAMPLE_AVATAR.id, list: [...BUILTIN_AVATARS], framing: 'bust', followPointer: true },
+    vault: { applied: '', dismissed: '' },
     memory: { enabled: true },
     profiles: {},
     gestures: { enabled: true, list: [...BUILTIN_ANIMATIONS] },

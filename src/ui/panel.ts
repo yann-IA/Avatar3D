@@ -17,6 +17,9 @@ export interface PanelActions {
   importAnimation(file: File): void
   removeAnimation(id: string): void
   resetPersona(): void
+  vaultCreate(): void
+  vaultLoad(): void
+  vaultImport(file: File): void
   memory(): MemoryManager
   memoryAdd(text: string): void
   memoryRemove(id: string): void
@@ -209,6 +212,16 @@ export class SettingsPanel {
               hint(
                 'Les clés sont enregistrées uniquement dans ce navigateur. Le relais local n’existe qu’avec <code>npm run dev</code> ou <code>npm run preview</code> : active-le si un fournisseur refuse les appels directs depuis le navigateur. Pour Ollama sans relais, lance-le avec <code>OLLAMA_ORIGINS=*</code>.',
               ),
+          `<h3>🔐 Coffre à clés</h3>`,
+          hint(
+            'Chiffre tes clés avec une phrase secrète pour les retrouver sur un autre appareil (le casque par exemple) en tapant seulement cette phrase. ' +
+              (s.vault.applied ? `Dernier coffre utilisé ici : ${new Date(s.vault.applied).toLocaleString('fr')}.` : ''),
+          ),
+          `<div class="row" style="flex-wrap:wrap">
+             <button class="btn" data-action="vault-create">Créer un coffre…</button>
+             <button class="btn" data-action="vault-load">Charger le coffre du site</button>
+             <label class="btn">Importer un fichier de coffre<input id="vault-file" type="file" accept=".json,application/json" hidden></label>
+           </div>`,
           `<button class="btn danger" data-action="clear">Effacer la conversation</button>`,
         ].join('')
       }
@@ -463,6 +476,12 @@ export class SettingsPanel {
       this.actions.addAvatarUrl(name, url)
     })
     on('reset-persona', () => this.actions.resetPersona())
+    on('vault-create', () => this.actions.vaultCreate())
+    on('vault-load', () => this.actions.vaultLoad())
+    this.body.querySelector<HTMLInputElement>('#vault-file')?.addEventListener('change', (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (file) this.actions.vaultImport(file)
+    })
     const addMemory = () => {
       const input = this.body.querySelector<HTMLInputElement>('#mem-new')
       if (input?.value.trim()) this.actions.memoryAdd(input.value)

@@ -343,3 +343,32 @@ h3 { margin: 8px 0 0; font-size: 0.95rem; }
 .memory-text { line-height: 1.4; overflow-wrap: anywhere; }
 /* Panneau des réglages ouvert : les messages s'affichent en bas pour ne pas masquer les onglets. */
 body:has(#panel:not([hidden])) .toast { top: auto; bottom: calc(env(safe-area-inset-bottom) + 24px); }
+
+/* ---------- fenêtre du coffre à clés ---------- */
+.dialog {
+  width: min(480px, calc(100% - 32px));
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--fg);
+}
+.dialog::backdrop { background: rgba(5, 5, 15, 0.6); backdrop-filter: blur(3px); }
+.dialog-body { display: flex; flex-direction: column; gap: 12px; padding: 20px; }
+.dialog-body h2 { margin: 0; font-size: 1.15rem; }
+.dialog-body p, .dialog-body ol { margin: 0; line-height: 1.45; font-size: 0.95rem; }
+.dialog-body ol { padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.dialog-body a { color: var(--accent); }
+.dialog-input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-size: 16px;
+}
+.dialog-input.secret { -webkit-text-security: disc; }
+.dialog-input.secret.revealed { -webkit-text-security: none; }
+.dialog-error { color: var(--danger); min-height: 1.2em; }
+.dialog-error:empty { display: none; }
+.dialog-actions { justify-content: flex-end; }

@@ -1,6 +1,6 @@
 // Service worker minimal : rend l'application installable et utilisable hors-ligne
 // (l'interface et les avatars déjà chargés sont mis en cache ; les appels aux API d'IA ne le sont jamais).
-const CACHE = 'companion-v1'
+const CACHE = 'companion-v2'
 
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => {
@@ -18,7 +18,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url)
   const sameOrigin = url.origin === self.location.origin
   const isAvatar = url.pathname.endsWith('.vrm')
-  if (url.pathname.includes('/__proxy/') || (!sameOrigin && !isAvatar)) return
+  // Le coffre à clés doit toujours être lu sur le réseau pour qu'une nouvelle version soit vue.
+  if (url.pathname.includes('/__proxy/') || url.pathname.endsWith('/vault.json') || (!sameOrigin && !isAvatar)) return
 
   if (req.mode === 'navigate') {
     // Page : réseau d'abord pour profiter des mises à jour, cache si hors-ligne.
