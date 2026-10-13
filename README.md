@@ -106,7 +106,7 @@ chromium-browser --kiosk --autoplay-policy=no-user-gesture-required http://local
 
 ## Changer d'avatar
 
-Quatre avatars sont fournis, à choisir dans **⚙ → Avatar** :
+Cinq avatars sont fournis, à choisir dans **⚙ → Avatar** :
 
 | Avatar | Personnage par défaut | Voix par défaut |
 |---|---|---|
@@ -114,6 +114,7 @@ Quatre avatars sont fournis, à choisir dans **⚙ → Avatar** :
 | Léo (homme, style figurine) | **Léo**, posé, drôle, amateur de musique et de cinéma | masculine, posée et chaleureuse (OpenAI : `ash`) |
 | Bip (petit robot à écran, antenne qui ballotte) | **Bip**, robot curieux qui découvre le monde des humains | aiguë et rythmée, « petit robot » (OpenAI : `alloy`) |
 | Dino (dinosaure tout rond, queue qui remue) | **Dino**, petit dinosaure joyeux et gourmand | enfantine et pétillante (OpenAI : `fable`) |
+| Claire (femme blonde, t-shirt noir au logo Orange, pantalon noir) | **Claire**, la trentaine, dynamique et chaleureuse | féminine, claire et posée (OpenAI : `coral`) |
 
 **Chaque avatar a son propre personnage** : nom, personnalité, voix et ton. Quand tu changes d'avatar,
 l'application mémorise ce que tu avais réglé pour le précédent et charge le personnage du nouveau. Tes retouches
@@ -125,6 +126,12 @@ Léo, Bip et Dino sont des créations originales du projet, en domaine public (C
 `scripts/build-avatars.mjs` à partir de formes simples, avec toutes les expressions VRM (yeux, bouche pour la
 parole, émotions, regard). Pour retoucher leurs couleurs ou leurs formes, modifie ce script puis lance
 `npm run build-avatars`. Leurs personnages par défaut sont définis dans `src/profiles.ts`.
+
+Claire est une adaptation du modèle d'exemple de pixiv (sa licence autorise la modification et la
+redistribution, y compris commerciale) : cheveux blonds, yeux bleu-gris, t-shirt noir avec le logo Orange,
+pantalon noir. Elle est générée par `scripts/build-claire.py` (Python 3 avec numpy et Pillow :
+`python3 scripts/build-claire.py`) ; la taille et le côté du logo se règlent en tête du script. Le logo Orange
+est une marque d'Orange : vérifie que son usage est autorisé dans ton contexte avant de diffuser l'avatar.
 
 Pour ajouter tes propres avatars : « Importer un fichier .vrm » (il est conservé dans le navigateur), ou colle
 une URL. Un avatar importé reprend le personnage actuel, que tu peux ensuite modifier : il le gardera.

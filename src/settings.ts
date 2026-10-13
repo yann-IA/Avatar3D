@@ -264,6 +264,8 @@ export const BUILTIN_AVATARS: AvatarEntry[] = [
   { id: 'leo', name: 'Léo (homme)', url: 'avatars/leo.vrm', builtin: true },
   { id: 'bip', name: 'Bip (petit robot)', url: 'avatars/bip.vrm', builtin: true },
   { id: 'dino', name: 'Dino (dinosaure)', url: 'avatars/dino.vrm', builtin: true },
+  // Adaptation du modèle de pixiv (voir scripts/build-claire.py).
+  { id: 'claire', name: 'Claire (femme, t-shirt Orange)', url: 'avatars/claire.vrm', builtin: true },
 ]
 
 export const DEFAULT_PROMPT = `Tu es une compagne virtuelle chaleureuse, curieuse et pleine d'humour.
