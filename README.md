@@ -116,7 +116,7 @@ Cinq avatars sont fournis, à choisir dans **⚙ → Avatar** :
 | Léo (homme, style figurine) | **Léo**, posé, drôle, amateur de musique et de cinéma | masculine, posée et chaleureuse (OpenAI : `ash`) |
 | Bip (petit robot à écran, antenne qui ballotte) | **Bip**, robot curieux qui découvre le monde des humains | aiguë et rythmée, « petit robot » (OpenAI : `alloy`) |
 | Dino (dinosaure tout rond, queue qui remue) | **Dino**, petit dinosaure joyeux et gourmand | enfantine et pétillante (OpenAI : `fable`) |
-| Claire (femme blonde, t-shirt noir au logo Orange, pantalon noir) | **Claire**, la trentaine, dynamique et chaleureuse | féminine, claire et posée (OpenAI : `coral`) |
+| Claire (femme blonde d'environ 1,70 m, chemise noire au logo Orange, pantalon noir) | **Claire**, la trentaine, dynamique et chaleureuse | féminine, claire et posée (OpenAI : `coral`) |
 
 **Chaque avatar a son propre personnage** : nom, personnalité, voix et ton. Quand tu changes d'avatar,
 l'application mémorise ce que tu avais réglé pour le précédent et charge le personnage du nouveau. Tes retouches
@@ -130,8 +130,8 @@ parole, émotions, regard). Pour retoucher leurs couleurs ou leurs formes, modif
 `npm run build-avatars`. Leurs personnages par défaut sont définis dans `src/profiles.ts`.
 
 Claire est une adaptation du modèle d'exemple de pixiv (sa licence autorise la modification et la
-redistribution, y compris commerciale) : cheveux blonds, yeux bleu-gris, t-shirt noir avec le logo Orange,
-pantalon noir. Elle est générée par `scripts/build-claire.py` (Python 3 avec numpy et Pillow :
+redistribution, y compris commerciale) : silhouette adulte (environ 1,70 m), cheveux blonds, yeux bleu-gris,
+chemise noire à manches longues avec le logo Orange, pantalon noir. Elle est générée par `scripts/build-claire.py` (Python 3 avec numpy et Pillow :
 `python3 scripts/build-claire.py`) ; la taille et le côté du logo se règlent en tête du script. Le logo Orange
 est une marque d'Orange : vérifie que son usage est autorisé dans ton contexte avant de diffuser l'avatar.
 

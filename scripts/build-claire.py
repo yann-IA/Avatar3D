@@ -4,14 +4,17 @@ Génère l'avatar « Claire » (public/avatars/claire.vrm) à partir du modèle 
 (public/avatars/default.vrm, licence VRM 1.0 : modification et redistribution autorisées,
 usage commercial autorisé).
 
-Claire : femme d'une trentaine d'années, cheveux blonds, yeux bleu-gris, t-shirt noir avec un petit
-logo Orange en haut à gauche (vu de face), pantalon noir.
+Claire : femme d'une trentaine d'années, environ 1,70 m, cheveux blonds, yeux bleu-gris, chemise noire
+à manches longues avec le logo Orange à droite (vu de face), pantalon noir.
 
 - cheveux et sourcils recolorés en blond (le relief des mèches est conservé) ;
-- t-shirt noir (les plis sont conservés), texture doublée (2048 × 4096) pour un logo net ;
-- logo placé par lancer de rayons sur le maillage du t-shirt : il suit la courbure de la poitrine ;
-- pantalon : le short devient noir et les jambes sont « habillées » (texture peinte d'après les os
-  des jambes, volume légèrement augmenté pour l'épaisseur du tissu, qui s'élargit vers le bas).
+- chemise : le t-shirt d'origine devient noir (plis conservés, texture doublée pour un logo net),
+  avec col, patte de boutonnage et boutons projetés sur le maillage (ils suivent la courbure du
+  buste), et des manches longues (bras « habillés » jusqu'aux poignets, avec revers) ;
+- pantalon d'un seul tenant : le short est retiré, jambes et bassin sont habillés (texture peinte
+  d'après les os, volume du tissu en coupe droite) ;
+- silhouette adulte : jambes, buste et bras allongés, tête un peu plus petite, yeux moins grands ;
+  le squelette, les matrices de liaison, les ressorts des cheveux et le regard suivent.
 
 Usage : python3 scripts/build-claire.py   (nécessite Python 3, numpy et Pillow)
 """
@@ -28,9 +31,12 @@ SRC = ROOT / 'public' / 'avatars' / 'default.vrm'
 OUT = ROOT / 'public' / 'avatars' / 'claire.vrm'
 
 ORANGE = (255, 121, 0)  # orange de la marque (#FF7900)
-LOGO_SIZE = 0.05  # côté du logo, en mètres
-# Côté du logo : -1 = à gauche vu de face (côté droit de la personne), +1 = de l'autre côté.
-LOGO_SIDE = -1
+# Teinte des manches longues (peintes sur la peau) : plus claire que le tissu de la chemise car le
+# matériau de la peau s'éclaire moins ; mesurée sur un rendu pour que les deux se confondent.
+SHIRT = (46, 46, 55)
+LOGO_SIZE = 0.046  # côté du logo, en mètres
+# Côté du logo : +1 = à droite vu de face (côté cœur de la personne), -1 = de l'autre côté.
+LOGO_SIDE = 1
 
 
 # ----------------------------------------------------------------------------- GLB
@@ -53,7 +59,25 @@ class Glb:
         start = bv.get('byteOffset', 0)
         return bytes(self.bin[start : start + bv['byteLength']])
 
+    def _read(self, bv_index, offset, component, comps, count):
+        bv = self.json['bufferViews'][bv_index]
+        dtype = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16, 5125: np.uint32, 5126: np.float32}[component]
+        start = bv.get('byteOffset', 0) + offset
+        return np.frombuffer(self.bin, dtype=dtype, count=count * comps, offset=start).reshape(count, comps).copy()
+
     def accessor(self, index):
+        acc = self.json['accessors'][index]
+        if 'sparse' in acc or 'bufferView' not in acc:
+            comps = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4, 'MAT4': 16}[acc['type']]
+            out = np.zeros((acc['count'], comps), np.float32) if 'bufferView' not in acc else self._dense(index)
+            sp = acc.get('sparse')
+            if sp:
+                ids = self._read(sp['indices']['bufferView'], sp['indices'].get('byteOffset', 0), sp['indices']['componentType'], 1, sp['count'])[:, 0]
+                out[ids] = self._read(sp['values']['bufferView'], sp['values'].get('byteOffset', 0), acc['componentType'], comps, sp['count'])
+            return out if comps > 1 else out[:, 0]
+        return self._dense(index)
+
+    def _dense(self, index):
         acc = self.json['accessors'][index]
         bv = self.json['bufferViews'][acc['bufferView']]
         comps = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4, 'MAT4': 16}[acc['type']]
@@ -68,6 +92,18 @@ class Glb:
 
     def write_accessor(self, index, values):
         acc = self.json['accessors'][index]
+        if 'sparse' in acc:
+            # seules les valeurs listées sont stockées (les autres restent nulles)
+            sp = acc['sparse']
+            assert 'bufferView' not in acc and acc['componentType'] == 5126
+            ids = self._read(sp['indices']['bufferView'], sp['indices'].get('byteOffset', 0), sp['indices']['componentType'], 1, sp['count'])[:, 0]
+            bv = self.json['bufferViews'][sp['values']['bufferView']]
+            start = bv.get('byteOffset', 0) + sp['values'].get('byteOffset', 0)
+            data = values[ids].astype(np.float32).tobytes()
+            self.bin[start : start + len(data)] = data
+            acc['min'] = values.min(axis=0).tolist()
+            acc['max'] = values.max(axis=0).tolist()
+            return
         bv = self.json['bufferViews'][acc['bufferView']]
         assert acc['componentType'] == 5126 and not bv.get('byteStride')
         start = bv.get('byteOffset', 0) + acc.get('byteOffset', 0)
@@ -287,6 +323,336 @@ def logo_image(px=1024):
     return img
 
 
+# ------------------------------------------------------------- décors du vêtement
+
+
+def logo_rgba():
+    img = np.asarray(logo_image(), np.float32)
+    return np.concatenate([img, np.full(img.shape[:2] + (1,), 255, np.float32)], -1)
+
+
+def project_decal(img, prim, cx, cy, w, h, rgba, n=16, soft=0.0):
+    """Plaque une image (RGBA) sur la texture : chaque point d'une grille, vu de face, est projeté
+    sur le maillage du vêtement ; l'image suit ainsi la courbure du corps."""
+    grid = np.full((n + 1, n + 1, 2), np.nan)
+    for gy in range(n + 1):
+        for gx in range(n + 1):
+            uv = raycast_front(prim, cx + (gx / n - 0.5) * w, cy + (0.5 - gy / n) * h)
+            if uv is not None:
+                grid[gy, gx] = uv
+    tris, vals = [], []
+    for gy in range(n):
+        for gx in range(n):
+            q = [(gy, gx), (gy, gx + 1), (gy + 1, gx + 1), (gy + 1, gx)]
+            if any(np.isnan(grid[a, b]).any() for a, b in q):
+                continue  # hors du vêtement (encolure…)
+            uvq = [grid[a, b] for a, b in q]
+            stq = [(b / n, a / n) for a, b in q]
+            for tri in ((0, 1, 2), (0, 2, 3)):
+                tris.append(np.array([uvq[k] for k in tri]))
+                vals.append(np.array([stq[k] for k in tri]))
+    mask, st = raster_triangles(img.size, np.array(tris), np.array(vals, np.float32))
+    a = np.asarray(img, np.float32).copy()
+    ys, xs = np.nonzero(mask)
+    H_, W_ = rgba.shape[:2]
+    s = np.clip(st[ys, xs, 0] * (W_ - 1), 0, W_ - 1)
+    t = np.clip(st[ys, xs, 1] * (H_ - 1), 0, H_ - 1)
+    s0, t0 = np.floor(s).astype(int), np.floor(t).astype(int)
+    s1, t1 = np.minimum(s0 + 1, W_ - 1), np.minimum(t0 + 1, H_ - 1)
+    fs, ft = (s - s0)[:, None], (t - t0)[:, None]
+    col = (rgba[t0, s0] * (1 - fs) + rgba[t0, s1] * fs) * (1 - ft) + (rgba[t1, s0] * (1 - fs) + rgba[t1, s1] * fs) * ft
+    alpha = col[:, 3:] / 255
+    if soft:  # bord sans crénelage
+        edge = np.asarray(Image.fromarray((mask * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(soft)), np.float32) / 255
+        alpha = alpha * np.minimum(1, edge[ys, xs][:, None] * 2)
+    # imprimé sur le tissu : légère trace des plis
+    fold = (luminance(img)[ys, xs] - 0.12)[:, None]
+    a[ys, xs] = a[ys, xs] * (1 - alpha) + np.clip(col[:, :3] * (0.94 + fold * 0.4), 0, 255) * alpha
+    return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
+
+
+def paint_shirt_front(img, prim, neck_front, neck_side, hem_y):
+    """Devant de chemise : col à deux pointes, patte de boutonnage et boutons."""
+    w, top_y, bottom_y = 0.26, neck_front + 0.03, hem_y - 0.005
+    h = top_y - bottom_y
+    ppm = 4000  # pixels par mètre
+    W_, H_ = int(w * ppm), int(h * ppm)
+    dec = Image.new('RGBA', (W_, H_), (0, 0, 0, 0))
+    d = ImageDraw.Draw(dec)
+
+    def px(x, y):
+        return ((x + w / 2) * ppm, (top_y - y) * ppm)
+
+    nf, ns = neck_front, neck_side
+    # patte de boutonnage
+    d.rectangle([px(-0.011, nf - 0.04), px(0.011, bottom_y)], fill=(34, 34, 40, 255))
+    for xe in (-0.011, 0.011):
+        d.line([px(xe, nf - 0.04), px(xe, bottom_y)], fill=(64, 64, 74, 255), width=3)
+    # col : deux pointes posées sur la poitrine
+    for sgn in (-1, 1):
+        flap = [(sgn * 0.004, nf + 0.006), (sgn * 0.056, ns + 0.008), (sgn * 0.1, ns - 0.042), (sgn * 0.036, nf - 0.082), (sgn * 0.004, nf - 0.05)]
+        # pied de col : recouvre l'encolure ronde d'origine
+        d.polygon([px(sgn * 0.0, nf + 0.03), px(sgn * 0.075, ns + 0.03), px(*flap[1]), px(*flap[0])], fill=(26, 26, 31, 255))
+        d.polygon([px(*q) for q in flap], fill=(22, 22, 26, 255), outline=(84, 84, 98, 255), width=4)
+        d.line([px(*flap[0]), px(*flap[1])], fill=(8, 8, 10, 255), width=6)  # pli du col contre le cou
+        d.line([px(sgn * 0.03, nf - 0.07), px(sgn * 0.085, ns - 0.036)], fill=(30, 30, 35, 255), width=3)  # surpiqûre
+    # boutons
+    y_b = nf - 0.062
+    while y_b > bottom_y + 0.02:
+        cx_, cy_ = px(0, y_b)
+        r = 0.0056 * ppm
+        d.ellipse([cx_ - r, cy_ - r, cx_ + r, cy_ + r], fill=(48, 48, 56, 255), outline=(104, 104, 120, 255), width=3)
+        for dx_, dy_ in ((-0.3, -0.3), (0.3, -0.3), (-0.3, 0.3), (0.3, 0.3)):
+            hx, hy, hr = cx_ + dx_ * r, cy_ + dy_ * r, r * 0.13
+            d.ellipse([hx - hr, hy - hr, hx + hr, hy + hr], fill=(18, 18, 22, 255))
+        y_b -= 0.078
+    return project_decal(img, prim, 0.0, (top_y + bottom_y) / 2, w, h, np.asarray(dec, np.float32), n=48)
+
+
+def remove_primitive(glb, mesh_name, material_name):
+    j = glb.json
+    for m in j['meshes']:
+        if m['name'] == mesh_name:
+            m['primitives'] = [p for p in m['primitives'] if j['materials'][p['material']]['name'] != material_name]
+
+
+# ------------------------------------------------------------------ volume du tissu
+
+
+def tube_growth(pos, sel, rel_fn, coord, xs, rs, minimum=0.004):
+    """Épaisseur à ajouter pour que chaque tranche du membre atteigne le rayon voulu (interpolé)."""
+    rel = rel_fn(pos[sel])
+    r = np.linalg.norm(rel, axis=1)
+    c = coord[sel]
+    bins = np.round(c / 0.02)
+    mean_r = np.zeros_like(r)
+    for b in np.unique(bins):
+        mean_r[bins == b] = r[bins == b].mean()
+    order = np.argsort(xs)
+    target = np.interp(c, np.array(xs)[order], np.array(rs)[order])
+    return np.maximum(target - mean_r, minimum)
+
+
+def apply_tube(pos, sel, rel_fn, grow, cols):
+    rel = rel_fn(pos[sel])
+    r = np.maximum(np.linalg.norm(rel, axis=1), 1e-6)
+    idx = np.nonzero(sel)[0]
+    for k, col in enumerate(cols):
+        pos[idx, col] += rel[:, k] / r * grow
+
+
+# --------------------------------------------------------------------- yeux, silhouette
+
+
+def mature_eyes(glb, sx, sy):
+    """Yeux légèrement moins grands (surtout en hauteur) : un regard plus adulte. Les formes
+    d'expression (clignement…) sont mises à l'échelle de la même façon."""
+    j = glb.json
+    face = next(m for m in j['meshes'] if m['name'] == 'Face')
+    names = {'EyeIris_00_EYE', 'EyeWhite_00_EYE', 'EyeHighlight_00_EYE', 'FaceEyeline_00_FACE'}
+    prims = [p for p in face['primitives'] if j['materials'][p['material']]['name'] in names]
+    white = next(p for p in prims if j['materials'][p['material']]['name'] == 'EyeWhite_00_EYE')
+    wpos = glb.accessor(white['attributes']['POSITION'])
+    centers = {}
+    for sgn in (-1, 1):
+        q = wpos[np.sign(wpos[:, 0]) == sgn]
+        centers[sgn] = (q.min(axis=0) + q.max(axis=0)) / 2
+    done = set()
+    for p in prims:
+        acc = p['attributes']['POSITION']
+        pos = glb.accessor(acc)
+        side = np.where(pos[:, 0] >= 0, 1, -1)
+        c = np.stack([centers[s_] for s_ in side])
+        pos[:, 0] = c[:, 0] + (pos[:, 0] - c[:, 0]) * sx
+        pos[:, 1] = c[:, 1] + (pos[:, 1] - c[:, 1]) * sy
+        glb.write_accessor(acc, pos)
+        for target in p.get('targets', []):
+            ta = target.get('POSITION')
+            if ta is None or ta in done:
+                continue
+            delta = glb.accessor(ta)
+            delta[:, 0] *= sx
+            delta[:, 1] *= sy
+            glb.write_accessor(ta, delta)
+            done.add(ta)
+
+
+def world_matrices(j):
+    nodes = j['nodes']
+    parent = {c: i for i, n in enumerate(nodes) for c in n.get('children', [])}
+    cache = {}
+
+    def mat(i):
+        if i not in cache:
+            n = nodes[i]
+            m = np.eye(4)
+            m[:3, :3] = quat_mat(n.get('rotation', [0, 0, 0, 1])) * np.array(n.get('scale', [1, 1, 1]))
+            m[:3, 3] = n.get('translation', [0, 0, 0])
+            cache[i] = mat(parent[i]) @ m if i in parent else m
+        return cache[i]
+
+    return [mat(i) for i in range(len(nodes))], parent
+
+
+def reshape_body(glb, wp, hb, legs, torso, arms, head, overall):
+    """Change les proportions en respectant le squelette : jambes, buste et bras plus longs, tête
+    plus petite, puis taille générale. Sommets (et formes d'expression), articulations, matrices de
+    liaison, ressorts (cheveux), collisions et regard sont recalculés ensemble."""
+    j = glb.json
+    W, parent = world_matrices(j)
+    cat = {}
+    for name, node in hb.items():
+        if name in ('leftUpperLeg', 'rightUpperLeg', 'leftLowerLeg', 'rightLowerLeg'):
+            cat[node] = 'leg'
+        elif name in ('leftFoot', 'rightFoot', 'leftToes', 'rightToes'):
+            cat[node] = 'foot'
+        elif name in ('spine', 'chest', 'upperChest'):
+            cat[node] = 'torso'
+        elif name == 'neck':
+            cat[node] = 'neck'
+        elif name in ('leftShoulder', 'rightShoulder'):
+            cat[node] = 'shoulder'
+        elif name in ('leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm'):
+            cat[node] = 'arm'
+        elif 'Hand' in name or any(f in name for f in ('Thumb', 'Index', 'Middle', 'Ring', 'Little')):
+            cat[node] = 'hand'
+        elif name in ('head', 'leftEye', 'rightEye', 'jaw'):
+            cat[node] = 'head'
+        elif name == 'hips':
+            cat[node] = 'hips'
+
+    def category(i):
+        k = i
+        while k is not None:
+            if k in cat:
+                return cat[k]
+            k = parent.get(k)
+        return None  # hors du squelette (racine, maillages) : inchangé
+
+    ph = (wp[hb['leftUpperLeg']][1] + wp[hb['rightUpperLeg']][1]) / 2
+    foot_y = (wp[hb['leftFoot']][1] + wp[hb['rightFoot']][1]) / 2
+    hips_y, neck_y, sh_y = wp[hb['hips']][1], wp[hb['neck']][1], wp[hb['leftUpperArm']][1]
+    ax, hand_x = abs(wp[hb['leftUpperArm']][0]), abs(wp[hb['leftHand']][0])
+    head_j = wp[hb['head']]
+    lift = (legs - 1) * (ph - foot_y)
+    up_neck, up_arm = (torso - 1) * (neck_y - hips_y), (torso - 1) * (sh_y - hips_y)
+
+    def deform(c, P):
+        """Nouvelle position des points P (N×3) pour une catégorie d'os, et facteurs d'échelle."""
+        Q = P.copy()
+        A = np.ones(3)
+        if c == 'leg':
+            Q[:, 1] = ph + legs * (P[:, 1] - ph)
+            A[1] = legs
+        elif c == 'foot':
+            Q[:, 1] += (legs - 1) * (foot_y - ph)
+        elif c == 'torso':
+            Q[:, 1] = hips_y + torso * (P[:, 1] - hips_y)
+            A[1] = torso
+        elif c == 'neck':
+            Q[:, 1] += up_neck
+        elif c == 'shoulder':
+            Q[:, 1] += up_arm
+        elif c == 'arm':
+            sgn = np.sign(P[:, 0])
+            Q[:, 0] = sgn * (ax + arms * (np.abs(P[:, 0]) - ax))
+            Q[:, 1] += up_arm
+            A[0] = arms
+        elif c == 'hand':
+            Q[:, 0] += np.sign(P[:, 0]) * (arms - 1) * (hand_x - ax)
+            Q[:, 1] += up_arm
+        elif c == 'head':
+            Q = head_j + head * (P - head_j)
+            Q[:, 1] += up_neck
+            A[:] = head
+        if c is None:
+            return Q, A
+        Q[:, 1] += lift
+        return Q * overall, A * overall
+
+    cats = [category(i) for i in range(len(j['nodes']))]
+
+    # sommets et formes d'expression
+    done = set()
+    for ni, n in enumerate(j['nodes']):
+        if 'mesh' not in n or 'skin' not in n:
+            continue
+        joints = j['skins'][n['skin']]['joints']
+        for prim in j['meshes'][n['mesh']]['primitives']:
+            a = prim['attributes']
+            if a['POSITION'] in done:
+                continue
+            P = glb.accessor(a['POSITION'])
+            J = glb.accessor(a['JOINTS_0']).astype(int)
+            Wt = glb.accessor(a['WEIGHTS_0'])
+            Wt = Wt / np.maximum(Wt.sum(axis=1, keepdims=True), 1e-9)
+            nodes_of = np.array(joints)[J]
+            newP = np.zeros_like(P)
+            scale = np.zeros_like(P)
+            for node in np.unique(nodes_of):
+                w = (Wt * (nodes_of == node)).sum(axis=1)
+                m = w > 0
+                if not m.any():
+                    continue
+                Q, A = deform(cats[node], P[m])
+                newP[m] += w[m, None] * Q
+                scale[m] += w[m, None] * A
+            glb.write_accessor(a['POSITION'], newP)
+            done.add(a['POSITION'])
+            for target in prim.get('targets', []):
+                ta = target.get('POSITION')
+                if ta is not None and ta not in done:
+                    glb.write_accessor(ta, glb.accessor(ta) * scale)
+                    done.add(ta)
+
+    # articulations : nouvelles positions, orientations conservées
+    newp = {}
+    for i in range(len(j['nodes'])):
+        Q, _ = deform(cats[i], W[i][:3, 3][None])
+        newp[i] = Q[0]
+    for i, n in enumerate(j['nodes']):
+        if cats[i] is None:
+            continue
+        par = parent.get(i)
+        if par is None:
+            n['translation'] = newp[i].tolist()
+        else:
+            n['translation'] = (W[par][:3, :3].T @ (newp[i] - newp[par])).tolist()
+    # matrices de liaison des peaux
+    for skin in j['skins']:
+        old = glb.accessor(skin['inverseBindMatrices']).reshape(-1, 4, 4)
+        new = []
+        for k, node in enumerate(skin['joints']):
+            # pose de liaison d'origine (proche de la pose de repos) : seule sa position est déplacée
+            B = np.linalg.inv(old[k].T)
+            B[:3, 3] = deform(cats[node], B[:3, 3][None])[0][0]
+            new.append(np.linalg.inv(B).T.reshape(16))
+        glb.write_accessor(skin['inverseBindMatrices'], np.array(new))
+
+    # ressorts (cheveux), collisions, regard
+    def factor(i):
+        _, A = deform(cats[i], W[i][:3, 3][None])
+        return float(np.cbrt(A.prod()))
+
+    sb = j['extensions'].get('VRMC_springBone', {})
+    for col in sb.get('colliders', []):
+        f = factor(col['node'])
+        for shape in col['shape'].values():
+            for key in ('offset', 'tail'):
+                if key in shape:
+                    shape[key] = [v * f for v in shape[key]]
+            shape['radius'] *= f
+    for spring in sb.get('springs', []):
+        for jt in spring['joints']:
+            if 'hitRadius' in jt:
+                jt['hitRadius'] *= factor(jt['node'])
+    look = j['extensions']['VRMC_vrm'].get('lookAt')
+    if look and 'offsetFromHeadBone' in look:
+        look['offsetFromHeadBone'] = [v * head * overall for v in look['offsetFromHeadBone']]
+    top = max(newp[i][1] for i in range(len(newp)) if cats[i] == 'head')
+    print(f'silhouette : tête à {newp[hb["head"]][1]:.2f} m, plus haut point du squelette {top:.2f} m')
+
+
 # --------------------------------------------------------------------------- build
 
 
@@ -317,53 +683,19 @@ def main():
         if m['name'] == 'FaceBrow_00_FACE':
             pass
 
-    # --- t-shirt noir + logo
+    # --- chemise noire : col, patte de boutonnage, manches longues, logo
     i_top, top = glb.image('Tops_01')
-    top = black_fabric(top).resize((top.width * 2, top.height * 2), Image.LANCZOS)
+    top = black_fabric(top, dark=(16, 16, 19), light=(46, 46, 53)).resize((top.width * 2, top.height * 2), Image.LANCZOS)
     tops = primitive(glb, 'Body', 'Tops_01_CLOTH')
-    neck, chest = wp[hb['neck']], wp[hb['upperChest']]
+    tp = tops['pos']
+    front = tp[:, 2] > 0
+    neck_front = tp[front & (np.abs(tp[:, 0]) < 0.012), 1].max()  # bas de l'encolure, devant
+    neck_side = tp[front & (np.abs(np.abs(tp[:, 0]) - 0.055) < 0.012), 1].max()
+    hem_y = tp[:, 1].min()
+    top = paint_shirt_front(top, tops, neck_front, neck_side, hem_y)
+    # logo à droite vu de face, à la place d'une poche de poitrine
     shoulder_x = abs(wp[hb['leftUpperArm']][0])
-    cx = LOGO_SIDE * shoulder_x * 0.52
-    cy = neck[1] - 0.115
-    # grille de points du logo projetés sur le t-shirt -> coordonnées UV (suit la courbure)
-    n = 10
-    grid = np.zeros((n + 1, n + 1, 2))
-    for gy in range(n + 1):
-        for gx in range(n + 1):
-            x = cx + (gx / n - 0.5) * LOGO_SIZE
-            y = cy + (0.5 - gy / n) * LOGO_SIZE
-            uv = raycast_front(tops, x, y)
-            if uv is None:
-                raise SystemExit(f'Logo hors du t-shirt en ({x:.3f}, {y:.3f})')
-            grid[gy, gx] = uv
-    logo = np.asarray(logo_image(), np.float32)
-    tris, vals = [], []
-    for gy in range(n):
-        for gx in range(n):
-            q = [(gy, gx), (gy, gx + 1), (gy + 1, gx + 1), (gy + 1, gx)]
-            uvq = [grid[a, b] for a, b in q]
-            stq = [(b / n, a / n) for a, b in q]
-            for t in ((0, 1, 2), (0, 2, 3)):
-                tris.append(np.array([uvq[k] for k in t]))
-                vals.append(np.array([stq[k] for k in t]))
-    mask, st = raster_triangles(top.size, np.array(tris), np.array(vals, np.float32))
-    a = np.asarray(top, np.float32).copy()
-    ys, xs = np.nonzero(mask)
-    s = np.clip(st[ys, xs, 0] * (logo.shape[1] - 1), 0, logo.shape[1] - 1)
-    t = np.clip(st[ys, xs, 1] * (logo.shape[0] - 1), 0, logo.shape[0] - 1)
-    # échantillonnage bilinéaire du logo
-    s0, t0 = np.floor(s).astype(int), np.floor(t).astype(int)
-    s1, t1 = np.minimum(s0 + 1, logo.shape[1] - 1), np.minimum(t0 + 1, logo.shape[0] - 1)
-    fs, ft = (s - s0)[:, None], (t - t0)[:, None]
-    col = (logo[t0, s0] * (1 - fs) + logo[t0, s1] * fs) * (1 - ft) + (logo[t1, s0] * (1 - fs) + logo[t1, s1] * fs) * ft
-    # le logo est imprimé sur le tissu : légère trace des plis
-    shade = (luminance(Image.fromarray(a.astype(np.uint8)))[ys, xs] - 0.12)[:, None]
-    a[ys, xs] = np.clip(col * (0.94 + shade * 0.4), 0, 255)
-    # bord net mais sans crénelage : on lisse uniquement le contour du logo
-    edge = Image.fromarray((mask * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.8))
-    soft = np.asarray(edge, np.float32)[..., None] / 255
-    orig = np.asarray(top, np.float32)
-    top = Image.fromarray(np.clip(a * soft + orig * (1 - soft), 0, 255).astype(np.uint8))
+    top = project_decal(top, tops, LOGO_SIDE * shoulder_x * 0.62, neck_front - 0.105, LOGO_SIZE, LOGO_SIZE, logo_rgba(), soft=0.8)
     glb.set_image(i_top, top)
     for m in j['materials']:
         if m['name'] == 'Tops_01_CLOTH':
@@ -374,47 +706,67 @@ def main():
             mt['parametricRimLiftFactor'] = 0.0
             mt['outlineColorFactor'] = [0.02, 0.02, 0.025]
 
-    # --- short noir mat (devient le haut du pantalon)
-    i_bot, bot = glb.image('Bottoms_01')
-    # même tissu que le pantalon : seuls les plis restent, très atténués (plus de revers brillant)
-    l = luminance(bot)
-    shade = np.clip((l - np.median(l[l > 0.02])) * 0.5, -0.04, 0.05)
-    a = np.clip(np.array([25, 25, 29], np.float32) + shade[..., None] * 160, 0, 255)
-    glb.set_image(i_bot, Image.fromarray(a.astype(np.uint8)))
-    for m in j['materials']:
-        if m['name'] == 'Bottoms_01_CLOTH':
-            mt = m['extensions']['VRMC_materials_mtoon']
-            # mêmes réglages d'ombre que le tissu des jambes, pour un pantalon d'un seul tenant
-            mt['shadeColorFactor'] = [0.68, 0.68, 0.71]
+    # --- plus de short : un seul pantalon, de la taille aux chevilles
+    remove_primitive(glb, 'Body', 'Bottoms_01_CLOTH')
 
-    # --- jambes : pantalon noir
+    # --- peau habillée : jambes et bassin (pantalon), bras jusqu'aux poignets (manches longues)
     body = primitive(glb, 'Body', 'Body_00_SKIN')
-    leg_bones = {hb[k] for k in ('leftUpperLeg', 'rightUpperLeg', 'leftLowerLeg', 'rightLowerLeg', 'leftFoot', 'rightFoot', 'leftToes', 'rightToes')}
     jn = np.array(joint_nodes)[body['joints'].astype(int)]  # nœud de chaque influence
-    leg_w = (np.isin(jn, list(leg_bones)) * body['weights']).sum(axis=1)
-    hips_y = wp[hb['hips']][1]
+
+    # os humanoïde de rattachement de chaque nœud (les os de torsion « J_Roll » comptent pour leur bras)
+    _, parent_of = world_matrices(j)
+    human_of = {}
+    by_node = {v: k for k, v in hb.items()}
+    for node in set(jn.ravel().tolist()):
+        k = node
+        while k is not None and k not in by_node:
+            k = parent_of.get(k)
+        human_of[node] = by_node.get(k)
+    owner = np.vectorize(lambda n_: human_of.get(int(n_)) or '')(jn)
+
+    def weight_of(names):
+        return (np.isin(owner, list(names)) * body['weights']).sum(axis=1)
+
+    leg_w = weight_of(('leftUpperLeg', 'rightUpperLeg', 'leftLowerLeg', 'rightLowerLeg', 'leftFoot', 'rightFoot', 'leftToes', 'rightToes'))
+    arm_w = weight_of(('leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm'))
     pos = body['pos']
-    is_leg = (leg_w > 0.5) | ((pos[:, 1] < hips_y - 0.04) & (leg_w > 0.15))
-    tri_leg = is_leg[body['idx']].any(axis=1)
+    x, y = pos[:, 0], pos[:, 1]
+    hand_x = abs(wp[hb['leftHand']][0])
+    waist_y = hem_y + 0.06  # le haut du pantalon reste caché sous la chemise
+    is_leg = (y < waist_y) & ((leg_w > 0.15) | (np.abs(x) < 0.2))
+    is_arm = (arm_w > 0.5) & (np.abs(x) < hand_x - 0.012)
+    idx = body['idx']
+    tri_cloth = (is_leg | is_arm)[idx].all(axis=1) | (is_leg[idx].any(axis=1) & (y[idx] < waist_y - 0.02).all(axis=1))
     i_body, skin = glb.image('Body_00')
-    mask = raster_triangles(skin.size, body['uv'][body['idx'][tri_leg]])
-    # Marge autour des zones peintes (évite un liseré couleur peau aux coutures de la texture),
-    # sans déborder sur la peau visible (bras, ventre…).
-    skin_mask = raster_triangles(skin.size, body['uv'][body['idx'][~tri_leg]])
+    mask = raster_triangles(skin.size, body['uv'][idx[tri_cloth]])
+    skin_mask = raster_triangles(skin.size, body['uv'][idx[~tri_cloth]])
     grown = np.asarray(Image.fromarray((mask * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(13)), np.uint8) > 0
     mask_img = Image.fromarray(((mask | (grown & ~skin_mask)) * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(3))
+    # poignets : revers de manche (bande légèrement plus claire, liseré)
+    arm_tris = idx[tri_cloth & is_arm[idx].any(axis=1)]
+    arm_mask, ax_val = raster_triangles(skin.size, body['uv'][arm_tris], np.abs(x)[arm_tris][..., None].astype(np.float32))
+    arm_mask = np.asarray(Image.fromarray((arm_mask * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(9)), np.uint8) > 0
+    ax_val = ax_val[..., 0]
+    cuff = (ax_val > hand_x - 0.065) & (ax_val < hand_x - 0.012)
+    cuff_line = (ax_val > hand_x - 0.068) & (ax_val < hand_x - 0.062)
     rng = np.random.default_rng(7)
     noise = rng.normal(0, 1, (skin.height, skin.width)).astype(np.float32)
     noise = np.asarray(Image.fromarray(((noise * 18) + 128).clip(0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.2)), np.float32) - 128
     fabric = np.clip(np.array([30, 30, 35], np.float32) + noise[..., None] * 0.08, 0, 255)
+    # manches : même teinte que la chemise (le pantalon est un peu plus sombre)
+    fabric[arm_mask] = np.clip(np.array(SHIRT, np.float32) + noise[arm_mask][:, None] * 0.08, 0, 255)
+    fabric[cuff] = [s + 6 for s in SHIRT]
+    fabric[cuff_line] = [s + 30 for s in SHIRT]
     sk = np.asarray(skin, np.float32)
     k = np.asarray(mask_img, np.float32)[..., None] / 255
     glb.set_image(i_body, Image.fromarray(np.clip(fabric * k + sk * (1 - k), 0, 255).astype(np.uint8)))
-    # La peau a une ombre rosée (shadeColorFactor) qui teinterait le pantalon en violet : texture
+    # La peau a une ombre rosée (shadeColorFactor) qui teinterait le tissu en violet : texture
     # d'ombre séparée où le tissu est compensé pour rester gris anthracite dans l'ombre.
     skin_mat = next(m for m in j['materials'] if m['name'] == 'Body_00_SKIN')
     factor = np.array(skin_mat['extensions']['VRMC_materials_mtoon']['shadeColorFactor'], np.float32)
     shade_fabric = np.clip(np.array([17, 17, 20], np.float32) / factor + noise[..., None] * 0.05, 0, 255)
+    shade_fabric[arm_mask] = np.array(SHIRT, np.float32) * 0.62 / factor
+    shade_fabric[cuff_line] = np.array([s + 20 for s in SHIRT], np.float32) * 0.62 / factor
     shade_img = Image.fromarray(np.clip(shade_fabric * k + sk * (1 - k), 0, 255).astype(np.uint8))
     buf = io.BytesIO()
     shade_img.save(buf, 'PNG', optimize=True)
@@ -424,43 +776,51 @@ def main():
     j['textures'].append({'source': len(j['images']) - 1, 'sampler': j['textures'][skin_mat['pbrMetallicRoughness']['baseColorTexture']['index']].get('sampler', 0)})
     skin_mat['extensions']['VRMC_materials_mtoon']['shadeMultiplyTexture'] = {'index': len(j['textures']) - 1}
 
-    # Forme du pantalon : chaque jambe devient un tube de tissu qui prolonge le bas du short,
-    # légèrement fuselé jusqu'à la cheville (coupe droite), au lieu de coller à la peau.
-    bottoms = primitive(glb, 'Body', 'Bottoms_01_CLOTH')
-    hem_y = bottoms['pos'][:, 1].min()
-    foot_y = max(wp[hb['leftFoot']][1], wp[hb['rightFoot']][1])
-    y = pos[:, 1]
+    # --- volume du tissu
     new_pos = pos.copy()
+    foot_y = max(wp[hb['leftFoot']][1], wp[hb['rightFoot']][1])
     for side in ('left', 'right'):
+        # jambes : tube de tissu de coupe droite, du haut des cuisses aux chevilles
         hip, knee, foot = (wp[hb[f'{side}{b}']] for b in ('UpperLeg', 'LowerLeg', 'Foot'))
         ys_axis = np.array([foot[1], knee[1], hip[1]])
 
-        def axis(yv):
+        def leg_axis(yv):
             return np.stack([np.interp(yv, ys_axis, [foot[0], knee[0], hip[0]]), np.interp(yv, ys_axis, [foot[2], knee[2], hip[2]])], -1)
 
-        sel = is_leg & (np.sign(pos[:, 0]) == np.sign(hip[0])) & (y < hem_y + 0.06)
-        # rayon du bas du short autour de l'axe de la jambe
-        bp = bottoms['pos']
-        ring = bp[(bp[:, 1] < hem_y + 0.012) & (np.sign(bp[:, 0]) == np.sign(hip[0]))]
-        hem_r = np.linalg.norm(ring[:, [0, 2]] - axis(ring[:, 1]), axis=1).mean()
-        top_r = hem_r - 0.004  # juste à l'intérieur du short : le raccord ne se voit pas
-        ankle_y = foot_y + 0.07
-        bottom_r = 0.056
-        rel = pos[sel][:, [0, 2]] - axis(y[sel])
-        r = np.linalg.norm(rel, axis=1)
-        # rayon moyen de la jambe à chaque hauteur (tranches de 2 cm)
-        bins = np.round(y[sel] / 0.02)
-        mean_r = np.array([r[bins == b_].mean() for b_ in bins])
-        target = np.interp(y[sel], [ankle_y, hem_y], [bottom_r, top_r])
-        grow = np.maximum(target - mean_r, 0.004)
-        # au-dessus du bas du short : retour progressif vers la peau (caché sous le short)
-        grow *= np.clip(1 - (y[sel] - hem_y) / 0.05, 0.15, 1)
-        # vers le pied : le tissu se pose sur la chaussure
-        grow *= np.clip((y[sel] - (foot_y + 0.015)) / 0.05, 0, 1)
-        new_r = r + grow
-        new_pos[np.nonzero(sel)[0][:, None], [0, 2]] = axis(y[sel]) + rel / np.maximum(r, 1e-6)[:, None] * new_r[:, None]
-        print(f'jambe {side} : bas du short {hem_y:.3f} m, rayon {hem_r:.3f} m')
+        sel = is_leg & (leg_w > 0.15) & (np.sign(x) == np.sign(hip[0]))
+        thigh_y, ankle_y = hip[1] - 0.12, foot_y + 0.07
+        grow = tube_growth(new_pos, sel, lambda p: p[:, [0, 2]] - leg_axis(p[:, 1]), y, [ankle_y, thigh_y], [0.056, 0.072])
+        grow *= np.clip(1 - (y[sel] - thigh_y) / 0.1, 0.5, 1)  # vers le bassin : simple épaisseur
+        grow *= np.clip((y[sel] - (foot_y + 0.015)) / 0.05, 0, 1)  # le tissu se pose sur la chaussure
+        apply_tube(new_pos, sel, lambda p: p[:, [0, 2]] - leg_axis(p[:, 1]), grow, [0, 2])
+
+        # bras : manche longue qui prolonge la manche courte de la chemise
+        sgn = 1 if side == 'left' else -1
+        arm0, hand = wp[hb[f'{side}UpperArm']], wp[hb[f'{side}Hand']]
+
+        def arm_axis(xv):
+            t_ = (xv - arm0[0]) / (hand[0] - arm0[0])
+            return np.stack([arm0[1] + t_ * (hand[1] - arm0[1]), arm0[2] + t_ * (hand[2] - arm0[2])], -1)
+
+        sleeve_x = (sgn * tp[:, 0]).max()
+        ring = tp[sgn * tp[:, 0] > sleeve_x - 0.01]
+        sleeve_r = np.linalg.norm(ring[:, [1, 2]] - arm_axis(ring[:, 0]), axis=1).mean()
+        sel = is_arm & (sgn * x > sleeve_x - 0.03)
+        wrist_x = hand_x - 0.015
+        grow = tube_growth(new_pos, sel, lambda p: p[:, [1, 2]] - arm_axis(p[:, 0]), sgn * x, [sleeve_x, wrist_x], [sleeve_r - 0.004, 0.0], minimum=0.007)
+        grow *= np.clip((wrist_x + 0.01 - sgn * x[sel]) / 0.012, 0, 1)
+        apply_tube(new_pos, sel, lambda p: p[:, [1, 2]] - arm_axis(p[:, 0]), grow, [1, 2])
+        print(f'{side} : manche {sleeve_x:.3f} m (rayon {sleeve_r:.3f}), bas de chemise {hem_y:.3f} m')
+    # bassin : épaisseur du tissu
+    pelvis = (y < waist_y) & (leg_w <= 0.15) & (np.abs(x) < 0.2)
+    new_pos[pelvis] += body['nrm'][pelvis] * 0.006
     glb.write_accessor(body['pos_acc'], new_pos)
+
+    # --- visage plus adulte : yeux un peu moins grands, surtout en hauteur
+    mature_eyes(glb, sx=0.9, sy=0.84)
+
+    # --- silhouette adulte : jambes et buste plus longs, tête plus petite, plus grande
+    reshape_body(glb, wp, hb, legs=1.12, torso=1.05, arms=1.07, head=0.9, overall=1.04)
 
     # --- métadonnées et vignette (portrait rendu dans l'application : scripts/assets/claire-thumbnail.jpg)
     meta = j['extensions']['VRMC_vrm']['meta']
