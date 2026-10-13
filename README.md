@@ -81,7 +81,9 @@ Pour un usage permanent, publie le dossier `dist/` (créé par `npm run build`) 
 (GitHub Pages, Netlify, Cloudflare Pages…). Comme tout se passe dans le navigateur, aucun serveur n'est nécessaire.
 
 Pour voir l'avatar dans ta pièce en **réalité augmentée** (téléphone Android avec Chrome, casque Meta Quest),
-utilise la version [Avatar-3D-XR](https://yann-ia.github.io/Avatar-3D-XR/).
+appuie sur le bouton **RA** en haut de l'écran (affiché sur mobile) : il ouvre la version
+[Avatar-3D-XR](https://yann-ia.github.io/Avatar-3D-XR/). Les deux versions sont sur le même site : tes réglages,
+tes clés et les souvenirs de l'avatar y sont déjà.
 
 Pour ne pas retaper tes clés API sur le téléphone, utilise le
 [coffre à clés](#coffre-à-clés-saisir-ses-clés-une-seule-fois).
@@ -231,9 +233,8 @@ cette phrase.
    puis **Entrée** (ou « Déverrouiller »), c'est prêt. Si tu crées plus tard un nouveau coffre (nouvelle clé),
    il est proposé à nouveau sur les appareils déjà configurés.
 
-**Indicateurs.** En haut de l'écran, la pastille verte **🔐 Clés chargées** confirme que les clés du coffre sont
-sur l'appareil (une pastille orange **🔒 Coffre verrouillé** signifie qu'il reste à taper la phrase secrète ; un
-clic dessus ouvre la fenêtre). ⚙ → IA détaille les clés chargées.
+**Vérifier que les clés sont chargées.** Un message le confirme au déverrouillage, et ⚙ → IA indique l'état du
+coffre sur l'appareil (clés chargées, coffre trouvé mais pas encore déverrouillé, ou aucun coffre).
 
 **Clés masquées.** Les clés chargées depuis le coffre ne sont jamais affichées dans les réglages (IA, Voix,
 Écoute) : à leur place, « 🔐 Chargée depuis le coffre ». Personne ne peut donc les lire ni les recopier.

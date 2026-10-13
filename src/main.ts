@@ -4,7 +4,7 @@ import { Conversation } from './core/conversation'
 import { parseSegment, slugify } from './core/emotion'
 import { MemoryManager } from './core/memory'
 import { VaultDialog } from './ui/vaultDialog'
-import { availableVault, forgetVaultKeys, loadedVaultKeys, parseVault, releaseKey, type VaultFile } from './vault'
+import { availableVault, forgetVaultKeys, parseVault, releaseKey, type VaultFile } from './vault'
 import { DEFAULT_PROFILES, applyProfile, resetProfile, switchProfile } from './profiles'
 import { createLLM } from './llm'
 import { PROVIDERS, loadSettings, saveSettings, type AnimationEntry, type AvatarEntry } from './settings'
@@ -241,7 +241,6 @@ const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`
 function vaultApplied(keys: number): void {
   convo.reloadVoice()
   if (panel.isOpen) panel.render()
-  updateKeysIndicator()
   const msg = `${plural(keys, 'clé')} ${keys > 1 ? 'chargées' : 'chargée'} depuis le coffre.`
   toast(`🔐 ${msg}`, 'info', 5000)
 }
@@ -250,31 +249,9 @@ const vault = new VaultDialog(settings, vaultApplied)
 /** Dernier coffre trouvé (site ou fichier importé), pour l'indicateur. */
 let knownVault: VaultFile | null = null
 
-/** Indicateur en haut de l'écran : les clés sont-elles chargées ? */
-function updateKeysIndicator(): void {
-  const badge = $<HTMLButtonElement>('keys-badge')
-  const fromVault = loadedVaultKeys(settings)
-  if (fromVault) {
-    badge.className = 'keys-badge on'
-    badge.innerHTML = `🔐<span class="label"> Clés chargées</span>`
-    badge.title = `${plural(fromVault, 'clé')} du coffre ${fromVault > 1 ? 'sont chargées' : 'est chargée'} sur cet appareil`
-  } else if (needsSetup() && knownVault) {
-    badge.className = 'keys-badge off'
-    badge.innerHTML = `🔒<span class="label"> Coffre verrouillé</span>`
-    badge.title = 'Entre ta phrase secrète pour charger tes clés API'
-  }
-  badge.hidden = !fromVault && !(needsSetup() && knownVault)
-}
-
-$('keys-badge').addEventListener('click', () => {
-  if (!loadedVaultKeys(settings) && knownVault) vault.unlock(knownVault, { remindLater: false })
-  else panel.open('ia')
-})
-
 /** Au démarrage : propose le coffre s'il est nouveau pour cet appareil. */
 async function offerVault(): Promise<boolean> {
   const file = (knownVault = await availableVault())
-  updateKeysIndicator()
   panel.refresh('ia')
   if (!file || file.created === settings.vault.applied) return false
   // Appareil sans clé : on propose toujours le coffre (« Plus tard » ne vaut que pour cette fois).
@@ -295,7 +272,6 @@ async function offerVault(): Promise<boolean> {
 const panel = new SettingsPanel(settings, {
   onChange(path) {
     if (path.startsWith('tts.') || path === 'persona.language' || path === 'useProxy') convo.reloadVoice()
-    if (path.endsWith('.apiKey') || path === 'activeProvider') updateKeysIndicator()
     if (path === 'persona.name') $('persona-name').textContent = settings.persona.name
     if (path === 'memory.enabled' && !settings.memory.enabled) memory.disable()
     if (path === 'avatar.framing') stage.setFraming(settings.avatar.framing)
@@ -402,7 +378,6 @@ const panel = new SettingsPanel(settings, {
     const n = forgetVaultKeys(settings)
     convo.reloadVoice()
     panel.render()
-    updateKeysIndicator()
     toast(`🔓 Coffre désactivé : ${plural(n, 'clé')} ${n > 1 ? 'effacées' : 'effacée'} de cet appareil.`, 'info', 5000)
   },
   vaultRelease(path) {
@@ -410,7 +385,6 @@ const panel = new SettingsPanel(settings, {
     releaseKey(settings, path)
     convo.reloadVoice()
     panel.render()
-    updateKeysIndicator()
     panel.focusField(path)
   },
   async vaultImport(f) {
@@ -456,6 +430,16 @@ const panel = new SettingsPanel(settings, {
     toast('Conversation effacée.', 'info', 2500)
   },
 })
+
+/* ------------------------- Réalité augmentée ------------------------- */
+
+// Bouton RA vers la version Avatar-3D-XR : sur les appareils qui gèrent la RA, et sur tous les
+// mobiles (si la RA n'y est pas possible, la page RA explique pourquoi). Les deux versions sont sur
+// le même site : réglages, clés et souvenirs sont partagés.
+void (async () => {
+  const supported = await (navigator.xr?.isSessionSupported('immersive-ar') ?? Promise.resolve(false)).catch(() => false)
+  if (supported || matchMedia('(pointer: coarse)').matches) $('ar-btn').hidden = false
+})()
 
 /* ------------------------------ Démarrage ------------------------------ */
 

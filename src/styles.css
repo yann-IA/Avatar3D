@@ -374,19 +374,7 @@ body:has(#panel:not([hidden])) .toast { top: auto; bottom: calc(env(safe-area-in
 .dialog-error:empty { display: none; }
 .dialog-actions { justify-content: flex-end; }
 
-/* ---------- indicateur du coffre à clés ---------- */
-.keys-badge {
-  padding: 4px 10px;
-  border-radius: 99px;
-  border: 1px solid transparent;
-  font: inherit;
-  font-size: 0.8rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.keys-badge.on { color: #0c2a20; background: var(--listen); }
-.keys-badge.off { color: var(--think); background: rgba(255, 198, 92, 0.12); border-color: rgba(255, 198, 92, 0.5); }
-@media (max-width: 400px) { .keys-badge .label { display: none; } }
+/* ---------- état du coffre à clés (⚙ → IA) ---------- */
 .vault-status {
   padding: 10px 12px;
   border-radius: 10px;
@@ -449,3 +437,19 @@ body:has(#panel:not([hidden])) .toast { top: auto; bottom: calc(env(safe-area-in
 .picker-list button:hover, .picker-list button:focus-visible { background: rgba(255, 255, 255, 0.08); }
 .picker-list button.current { background: rgba(143, 123, 255, 0.25); }
 .picker-list small { display: block; opacity: 0.6; font-size: 0.75rem; }.vault-status.ready { background: rgba(255, 198, 92, 0.12); border: 1px solid rgba(255, 198, 92, 0.5); color: var(--think); }
+
+/* ---------- bouton RA (vers la version Avatar-3D-XR) ---------- */
+.ar-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 42px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 99px;
+  color: white;
+  font-weight: 700;
+  text-decoration: none;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 6px 18px rgba(143, 123, 255, 0.4);
+}

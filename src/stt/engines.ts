@@ -1,5 +1,6 @@
 import { describeError } from '../llm/openai'
 import { sharedKey, viaProxy, type Settings } from '../settings'
+import { audioContext } from '../tts/audio'
 
 export interface STTCallbacks {
   /** Transcription partielle (pendant que l'utilisateur parle). */
@@ -38,7 +39,11 @@ function recognitionCtor(): SpeechRecognitionCtor | undefined {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition
 }
 
-export const browserSTTAvailable = () => recognitionCtor() !== undefined
+/**
+ * Le navigateur du casque Meta Quest expose l'objet de reconnaissance vocale sans qu'il fonctionne :
+ * on le considère comme absent (Whisper est alors utilisé).
+ */
+export const browserSTTAvailable = () => recognitionCtor() !== undefined && !/OculusBrowser|Quest/i.test(navigator.userAgent)
 
 const NO_BROWSER_STT =
   'Ce navigateur ne sait pas reconnaître la voix. Ajoute une clé OpenAI dans ⚙ → IA (elle servira aussi à l’écoute), ou choisis « Whisper » dans ⚙ → Écoute avec une clé OpenAI ou Groq. Tu peux aussi écrire tes messages.'
@@ -139,10 +144,14 @@ export class WhisperSTT implements STTEngine {
   }
 
   private record(stream: MediaStream, cb: STTCallbacks): Promise<Blob | null> {
-    const ctx = new AudioContext()
+    // Contexte audio partagé, déjà « déverrouillé » par un geste (bouton micro ou RA) : un contexte
+    // créé ici, depuis un bouton de manette en RA, resterait suspendu et n'entendrait rien.
+    const ctx = audioContext()
+    void ctx.resume()
     const analyser = ctx.createAnalyser()
     analyser.fftSize = 1024
-    ctx.createMediaStreamSource(stream).connect(analyser)
+    const source = ctx.createMediaStreamSource(stream)
+    source.connect(analyser)
     const data = new Float32Array(analyser.fftSize)
 
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find((m) => MediaRecorder.isTypeSupported(m))
@@ -150,34 +159,44 @@ export class WhisperSTT implements STTEngine {
     const chunks: Blob[] = []
     recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       let spoke = false
+      let silent = false
       let keep = true
       let lastVoice = performance.now()
       const started = performance.now()
       let noiseFloor = 0.01
-      let raf = 0
+      let timer = 0
 
       const end = (k: boolean) => {
         keep = k
-        cancelAnimationFrame(raf)
+        clearInterval(timer)
         this.stopNow = null
         if (recorder.state !== 'inactive') recorder.stop()
       }
       this.stopNow = end
 
       recorder.onstop = () => {
-        void ctx.close()
+        source.disconnect()
         cb.onLevel?.(0)
-        resolve(keep && spoke && chunks.length ? new Blob(chunks, { type: recorder.mimeType }) : null)
+        if (silent) reject(new Error('Je n’ai rien entendu. Vérifie que le micro est autorisé pour ce site, puis parle juste après avoir appuyé.'))
+        else resolve(keep && spoke && chunks.length ? new Blob(chunks, { type: recorder.mimeType }) : null)
       }
 
       const tick = () => {
+        const now = performance.now()
+        if (ctx.state !== 'running') {
+          // Analyse du son impossible (contexte audio bloqué) : on enregistre quand même et on envoie
+          // au second appui sur le bouton, ou au bout de 8 secondes.
+          spoke = true
+          cb.onLevel?.(0.3 + 0.2 * Math.sin(now / 150))
+          if (now - started > 8000) end(true)
+          return
+        }
         analyser.getFloatTimeDomainData(data)
         let sum = 0
         for (const x of data) sum += x * x
         const rms = Math.sqrt(sum / data.length)
-        const now = performance.now()
         // Le seuil s'adapte au bruit ambiant mesuré tant que personne ne parle.
         if (!spoke) noiseFloor = noiseFloor * 0.95 + rms * 0.05
         const threshold = Math.max(0.015, noiseFloor * 2.5)
@@ -187,12 +206,16 @@ export class WhisperSTT implements STTEngine {
         }
         cb.onLevel?.(Math.min(1, rms * 12))
         if (spoke && now - lastVoice > this.s.stt.silenceMs) return end(true)
-        if (!spoke && now - started > 10_000) return end(false) // personne n'a parlé
+        if (!spoke && now - started > 10_000) {
+          silent = true // personne n'a parlé
+          return end(false)
+        }
         if (now - started > 45_000) return end(true)
-        raf = requestAnimationFrame(tick)
       }
       recorder.start(250)
-      raf = requestAnimationFrame(tick)
+      // Minuterie et non requestAnimationFrame : celui de la page est suspendu pendant une session
+      // de réalité augmentée (casque Quest), la fin de phrase n'était alors jamais détectée.
+      timer = window.setInterval(tick, 40)
     })
   }
 
