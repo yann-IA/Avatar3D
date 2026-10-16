@@ -38,6 +38,7 @@ from vroid_kit import (
     raster_triangles,
     remove_primitive,
     reshape_body,
+    settle_springs,
     shorten_hair,
     scene,
     shirt_landmarks,
@@ -114,10 +115,14 @@ def paint_vest(top, tops, wp, hb, neck_front, hem_y):
     tp = tops['pos']
     neck_back = tp[(tp[:, 2] < 0) & (np.abs(tp[:, 0]) < 0.012), 1].max()
     # distances (en mètres) aux bords : emmanchure, encolure en V devant, encolure ronde derrière
-    armhole = np.interp(y, [sh_y - 0.14, sh_y - 0.06, sh_y + 0.04], [0.26, 0.14, 0.115]) - np.abs(x)
+    # bretelles larges qui passent par-dessus les épaules (devant et dos se rejoignent)
+    armhole = np.interp(y, [sh_y - 0.14, sh_y - 0.06, sh_y + 0.04], [0.26, 0.15, 0.135]) - np.abs(x)
     v_bottom = neck_front - 0.17
-    vneck = np.where((z > 0) & (y > v_bottom), np.abs(x) - (y - v_bottom) * 0.48, 1.0)
-    rneck = np.where(z <= 0, (neck_back - 0.025) - y, 1.0)
+    v_half = np.minimum((y - v_bottom) * 0.48, 0.066)  # le V s'arrête de s'élargir près du cou
+    vneck = np.where((z > 0) & (y > v_bottom), np.abs(x) - v_half, 1.0)
+    # encolure ronde derrière (et non une coupe horizontale sur toute la largeur)
+    ry, rx, cy_ = 0.045, 0.07, neck_back + 0.012
+    rneck = np.where(z <= 0, (np.sqrt((x / rx) ** 2 + ((y - cy_) / ry) ** 2) - 1) * ry, 1.0)
     d = np.minimum(np.minimum(armhole, vneck), rneck)
     inside = covered & (d > 0)
     binding = inside & (d < 0.009)
@@ -152,7 +157,7 @@ def main():
     a[dark] = a[dark] * 0.3 + np.array([52, 34, 24], np.float32) * 0.7
     glb.set_image(i, Image.fromarray(a.astype(np.uint8)))
     # coupe au-dessus des épaules : le logo du dos, entre les omoplates, reste visible
-    shorten_hair(glb, cut=1.32, keep=0.3)
+    shorten_hair(glb, cut=1.32, keep=0.3, follow=True)
     for m in j['materials']:
         if m['name'].endswith('_HAIR'):
             mt = m['extensions']['VRMC_materials_mtoon']
@@ -175,7 +180,7 @@ def main():
     top = project_decal(top, tops, shoulder_x * 0.66, neck_front - 0.105, bw, bw * badge.shape[0] / badge.shape[1], badge, soft=0.8)
     # logo du dos, entre les omoplates
     fw = 0.19
-    top = project_decal(top, tops, 0.0, neck_front - 0.09, fw, fw * full.shape[0] / full.shape[1], full, n=32, soft=0.8, back=True)
+    top = project_decal(top, tops, 0.0, neck_front - 0.11, fw, fw * full.shape[0] / full.shape[1], full, n=32, soft=0.8, back=True)
     glb.set_image(i_top, top)
     for m in j['materials']:
         if m['name'] == 'Tops_01_CLOTH':
@@ -188,13 +193,15 @@ def main():
         glb, wp, hb, tp, hem_y,
         legs=TROUSERS, legs_shade=[c * 0.8 for c in TROUSERS],
         sleeves=SLEEVES, sleeves_shade=[c * 0.8 for c in SLEEVES],
-        cuff=[c - 6 for c in SLEEVES], cuff_line=(186, 186, 198), cuff_line_shade=(150, 150, 162),
-        neutral_shade=True,
+        cuff=[c - 4 for c in SLEEVES], cuff_line=(226, 226, 233), cuff_line_shade=(186, 186, 196),
+        neutral_shade=True, cuff_width=0.04,
     )
 
     # --- visage et silhouette adultes
     mature_eyes(glb, sx=0.9, sy=0.84)
     reshape_body(glb, wp, hb, legs=1.11, torso=1.05, arms=1.07, head=0.9, overall=1.03)
+    # pointes de cheveux qui démarrent dans une zone de collision : plus simulées (sinon elles flottent)
+    print(f'mèches stabilisées : {settle_springs(glb)} articulations')
 
     finish(glb, OUT, 'Camille', THUMB)
 

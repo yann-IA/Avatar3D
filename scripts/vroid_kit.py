@@ -659,7 +659,7 @@ def add_texture(glb, img, name, like_texture):
     return len(j['textures']) - 1
 
 
-def dress_body(glb, wp, hb, tp, hem_y, legs, legs_shade, sleeves, sleeves_shade, cuff, cuff_line, cuff_line_shade, neutral_shade=False):
+def dress_body(glb, wp, hb, tp, hem_y, legs, legs_shade, sleeves, sleeves_shade, cuff, cuff_line, cuff_line_shade, neutral_shade=False, cuff_width=0.053):
     """Habille la peau : pantalon (jambes et bassin) et manches longues jusqu'aux poignets, avec
     revers, puis donne du volume au tissu. `tp` : sommets du haut (t-shirt d'origine), `hem_y` : son
     bas. Couleurs en RVB 0-255 ; les teintes « _shade » sont celles voulues dans l'ombre.
@@ -704,8 +704,9 @@ def dress_body(glb, wp, hb, tp, hem_y, legs, legs_shade, sleeves, sleeves_shade,
     arm_mask, ax_val = raster_triangles(skin.size, body['uv'][arm_tris], np.abs(x)[arm_tris][..., None].astype(np.float32))
     arm_mask = np.asarray(Image.fromarray((arm_mask * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(9)), np.uint8) > 0
     ax_val = ax_val[..., 0]
-    cuff_band = (ax_val > hand_x - 0.065) & (ax_val < hand_x - 0.012)
-    cuff_edge = (ax_val > hand_x - 0.068) & (ax_val < hand_x - 0.062)
+    c0 = hand_x - 0.012 - cuff_width  # haut du revers
+    cuff_band = (ax_val > c0) & (ax_val < hand_x - 0.012)
+    cuff_edge = (ax_val > c0 - 0.003) & (ax_val < c0 + 0.003)
     rng = np.random.default_rng(7)
     noise = rng.normal(0, 1, (skin.height, skin.width)).astype(np.float32)
     noise = np.asarray(Image.fromarray(((noise * 18) + 128).clip(0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.2)), np.float32) - 128
@@ -772,13 +773,42 @@ def dress_body(glb, wp, hb, tp, hem_y, legs, legs_shade, sleeves, sleeves_shade,
     glb.write_accessor(body['pos_acc'], new_pos)
 
 
-def shorten_hair(glb, cut, keep):
+def shorten_hair(glb, cut, keep, follow=False):
     """Raccourcit la chevelure : sous la hauteur `cut`, les mèches sont ramenées vers le haut
-    (longueur × keep). Sommets, os des mèches (ressorts) et matrices de liaison suivent."""
+    (longueur × keep). Sommets, os des mèches (ressorts) et matrices de liaison suivent.
+    follow : les mèches remontées prennent la forme de la chevelure d'origine à leur nouvelle hauteur
+    (elles se posent sur la nuque et les épaules au lieu de flotter en arrière)."""
     j = glb.json
 
     def f(y):
         return np.where(y < cut, cut + (y - cut) * keep, y)
+
+    move = None
+    if follow:
+        ref = primitive(glb, 'Hair', 'Hair_00_HAIR')['pos']
+        bins = np.arange(ref[:, 1].min() - 0.02, ref[:, 1].max() + 0.04, 0.02)
+        centers = (bins[:-1] + bins[1:]) / 2
+        back = ref[:, 2] < -0.03
+        zb, wx = [], []
+        for lo, hi in zip(bins[:-1], bins[1:]):
+            m = (ref[:, 1] >= lo) & (ref[:, 1] < hi)
+            mb = m & back
+            zb.append(np.median(ref[mb, 2]) if mb.any() else np.nan)
+            wx.append(np.mean(np.abs(ref[m, 0])) if m.any() else np.nan)
+        zb, wx = np.array(zb), np.array(wx)
+        ok_z, ok_w = ~np.isnan(zb), ~np.isnan(wx)
+
+        def move(P):
+            y0 = P[:, 1].copy()
+            y1 = f(y0)
+            low = y0 < cut
+            Q = P.copy()
+            Q[:, 1] = y1
+            dz = np.interp(y1, centers[ok_z], zb[ok_z]) - np.interp(y0, centers[ok_z], zb[ok_z])
+            sx = np.clip(np.interp(y1, centers[ok_w], wx[ok_w]) / np.maximum(np.interp(y0, centers[ok_w], wx[ok_w]), 1e-4), 0.6, 1.2)
+            Q[low & (P[:, 2] < -0.03), 2] += dz[low & (P[:, 2] < -0.03)]
+            Q[low, 0] *= sx[low]
+            return Q
 
     done = set()
     for mesh_name, mat_name in (('Hair', 'Hair_00_HAIR'), ('Body', 'HairBack_00_HAIR')):
@@ -787,14 +817,20 @@ def shorten_hair(glb, cut, keep):
             if j['materials'][p['material']]['name'] != mat_name or p['attributes']['POSITION'] in done:
                 continue
             P = glb.accessor(p['attributes']['POSITION'])
-            P[:, 1] = f(P[:, 1])
+            if move:
+                P = move(P)
+            else:
+                P[:, 1] = f(P[:, 1])
             glb.write_accessor(p['attributes']['POSITION'], P)
             done.add(p['attributes']['POSITION'])
     W, parent = world_matrices(j)
     hair = [i for i, n in enumerate(j['nodes']) if 'Hair' in n.get('name', '') and 'mesh' not in n]
     newp = {i: W[i][:3, 3].copy() for i in range(len(j['nodes']))}
     for i in hair:
-        newp[i][1] = f(np.array(newp[i][1]))
+        if move:
+            newp[i] = move(newp[i][None])[0]
+        else:
+            newp[i][1] = f(np.array(newp[i][1]))
     for i in hair:
         par = parent.get(i)
         j['nodes'][i]['translation'] = (W[par][:3, :3].T @ (newp[i] - newp[par])).tolist()
@@ -807,6 +843,48 @@ def shorten_hair(glb, cut, keep):
         for kk, node in enumerate(skin['joints']):
             B = np.linalg.inv(old[kk].T)
             if node in hair_set:
-                B[1, 3] = f(np.array(B[1, 3]))
+                if move:
+                    B[:3, 3] = move(B[:3, 3][None])[0]
+                else:
+                    B[1, 3] = f(np.array(B[1, 3]))
             new.append(np.linalg.inv(B).T.reshape(16))
         glb.write_accessor(skin['inverseBindMatrices'], np.array(new))
+
+
+def settle_springs(glb, margin=0.004):
+    """Mèches qui démarrent à l'intérieur d'une zone de collision (après raccourcissement ou
+    changement de silhouette) : la physique les projetterait vers l'extérieur et les cheveux
+    sembleraient flotter. Chaque chaîne de ressort est arrêtée avant sa première articulation en
+    collision ; la suite de la mèche suit sans être simulée. Renvoie le nombre d'articulations retirées."""
+    j = glb.json
+    sb = j['extensions'].get('VRMC_springBone')
+    if not sb:
+        return 0
+    W, _ = world_matrices(j)
+
+    def inside(p, ci, hit):
+        col = sb['colliders'][ci]
+        M = W[col['node']]
+        for kind, shape in col['shape'].items():
+            a = (M @ np.array([*shape.get('offset', [0, 0, 0]), 1.0]))[:3]
+            if kind == 'sphere':
+                d = np.linalg.norm(p - a)
+            else:  # capsule : distance au segment
+                b = (M @ np.array([*shape['tail'], 1.0]))[:3]
+                t = np.clip(np.dot(p - a, b - a) / max(np.dot(b - a, b - a), 1e-9), 0, 1)
+                d = np.linalg.norm(p - (a + t * (b - a)))
+            if d < shape['radius'] + hit + margin:
+                return True
+        return False
+
+    removed = 0
+    for spring in sb.get('springs', []):
+        cols = [c for g in spring.get('colliderGroups', []) for c in sb['colliderGroups'][g]['colliders']]
+        joints = spring['joints']
+        for k in range(1, len(joints)):
+            p = W[joints[k]['node']][:3, 3]
+            if any(inside(p, c, joints[k].get('hitRadius', 0)) for c in cols):
+                removed += len(joints) - k
+                spring['joints'] = joints[: max(k, 1)]
+                break
+    return removed
